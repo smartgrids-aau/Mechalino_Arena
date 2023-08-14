@@ -15,67 +15,95 @@ def image_callback(msg):
     global cv_bridge, cv_image
     cv_image = cv_bridge.imgmsg_to_cv2(msg, desired_encoding="8UC3")
 
+len_of_histoty = 30
+history_index = 0
+publishable = False
+tl_hist = np.zeros((len_of_histoty,3))
+tr_hist = np.zeros((len_of_histoty,3))
+br_hist = np.zeros((len_of_histoty,3))
+bl_hist = np.zeros((len_of_histoty,3))
+
+def publish_tvec(tvec, id):
+    quaternion = tf.transformations.quaternion_from_euler(0, 0, 0)
+
+    header = Header()
+    header.stamp = rospy.Time.now()
+    header.frame_id = "camera"
+    pose = PoseStamped(header=header)
+    pose.pose.position.x = -1 * tvec[0]
+    pose.pose.position.y = tvec[1]
+    pose.pose.position.z = tvec[2]
+    pose.pose.orientation.x = quaternion[0]
+    pose.pose.orientation.y = quaternion[1]
+    pose.pose.orientation.z = quaternion[2]
+    pose.pose.orientation.w = quaternion[3]
+
+    corner_frame_id = "corner_"
+    if id == tl_id:
+        corner_frame_id += "tl"
+    elif id == tr_id:
+        corner_frame_id += "tr"
+    elif id == br_id:
+        corner_frame_id += "br"
+    elif id == bl_id:
+        corner_frame_id += "bl"
+
+    corner_frame_id += "_"+ str(id)
+
+    broadcaster.sendTransform((-1 * tvec[0], tvec[1], tvec[2]),
+                            quaternion,
+                            header.stamp,
+                            corner_frame_id,
+                            "camera")
 def corners_tf_publisher():
     global cv_image, camera_matrix, distortion_coeffs, aruco_marker_detector, objPoints, broadcaster, tl_id, tr_id, br_id, bl_id
+    global publishable, history_index, len_of_histoty, tl_hist, tr_hist, br_hist, bl_hist
     try:
         # Convert ROS Image message to OpenCV image using CvBridge
         
         gray = cv2.cvtColor(cv_image, cv2.COLOR_BGR2GRAY)
 
         markerCorners, markerIds, _ = aruco_marker_detector.detectMarkers(gray)
+
+        if (len(markerIds)!=4):
+            rospy.logwarn("Not all 4 corners are detectable!")
+            return
         
+        for id in markerIds:
+            if not (id in [tl_id,tr_id,br_id,bl_id]):
+                rospy.logwarn("Invalid id detected!")
+                return
         for i in range(len(markerIds)):
             retval, rvec, tvec = cv2.solvePnP(objPoints, markerCorners[i],camera_matrix,distortion_coeffs)
-            
-            # Convert rvec to a rotation matrix
-            R, _ = cv2.Rodrigues(rvec)
-
-            # Invert the rotation matrix using its transpose
-            inverted_R = np.transpose(R)
 
             # Invert the translation vector
             inverted_tvec = -tvec
 
-            # Convert the inverted rotation matrix to an inverted rotation vector
-            inv_rvec, _ = cv2.Rodrigues(inverted_R)
-
-            # Express the inverted translation vector as it is
-            inv_tvec = inverted_tvec
-
-            # inv_rvec = rvec
-            # inv_tvec = tvec
             
-            quaternion = tf.transformations.quaternion_from_euler(inv_rvec[0], inv_rvec[1], inv_rvec[2])
+            inverted_tvec =np.reshape(inverted_tvec,(1,3))
 
-            header = Header()
-            header.stamp = rospy.Time.now()
-            header.frame_id = "map"
-            pose = PoseStamped(header=header)
-            pose.pose.position.x = -1 * inv_tvec[0]
-            pose.pose.position.y = inv_tvec[1]
-            pose.pose.position.z = inv_tvec[2]
-            pose.pose.orientation.x = quaternion[0]
-            pose.pose.orientation.y = quaternion[1]
-            pose.pose.orientation.z = quaternion[2]
-            pose.pose.orientation.w = quaternion[3]
-
-            corner_frame_id = "corner_"
             if markerIds[i] == tl_id:
-                corner_frame_id += "tl"
+                tl_hist[history_index,:] = inverted_tvec
             elif markerIds[i] == tr_id:
-                corner_frame_id += "tr"
+                tr_hist[history_index,:] = inverted_tvec
             elif markerIds[i] == br_id:
-                corner_frame_id += "br"
+                br_hist[history_index,:] = inverted_tvec
             elif markerIds[i] == bl_id:
-                corner_frame_id += "bl"
+                bl_hist[history_index,:] = inverted_tvec
 
-            corner_frame_id += "_"+ str(markerIds[i])
+        history_index = (history_index + 1) % len_of_histoty
 
-            broadcaster.sendTransform((-1 * inv_tvec[0], inv_tvec[1], inv_tvec[2]),
-                                    quaternion,
-                                    header.stamp,
-                                    corner_frame_id,
-                                    "camera")
+        if history_index == 0: # all history slots are filled with samples
+            publishable = True # after enough sampleing tf will be published
+
+        if (publishable):
+            publish_tvec(np.average(tl_hist,axis=0),tl_id)
+            publish_tvec(np.average(tr_hist,axis=0),tr_id)
+            publish_tvec(np.average(br_hist,axis=0),br_id)
+            publish_tvec(np.average(bl_hist,axis=0),bl_id)
+        else:
+            rospy.loginfo(f"sampling {history_index+1} of {len_of_histoty}")
+        
 
             
     except Exception as e:
@@ -114,14 +142,7 @@ def corners_publisher():
     broadcaster = tf.TransformBroadcaster()
 
     # first 10 seconds publish corners every second
-    slow_down_turns = 10
-    rate = rospy.Rate(1)
-    while slow_down_turns > 0:
-        corners_tf_publisher()
-        rate.sleep()
-        slow_down_turns -= 1
-    # after that publish them every 1min
-    rate = rospy.Rate(1/15)
+    rate = rospy.Rate(10)
     while not rospy.is_shutdown():
         corners_tf_publisher()
         rate.sleep()

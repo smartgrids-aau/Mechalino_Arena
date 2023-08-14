@@ -74,11 +74,13 @@ Visualization Manager:
         All Enabled: true
         camera:
           Value: true
-        corner_bl_[120]:
+        corner_bl_120:
           Value: true
-        corner_tl_[130]:
+        corner_br_100:
           Value: true
-        corner_tr_[110]:
+        corner_tl_130:
+          Value: true
+        corner_tr_110:
           Value: true
       Marker Alpha: 1
       Marker Scale: 0.30000001192092896
@@ -88,11 +90,13 @@ Visualization Manager:
       Show Names: true
       Tree:
         camera:
-          corner_bl_[120]:
+          corner_bl_120:
             {}
-          corner_tl_[130]:
+          corner_br_100:
             {}
-          corner_tr_[110]:
+          corner_tl_130:
+            {}
+          corner_tr_110:
             {}
       Update Interval: 0
       Value: true
@@ -100,7 +104,7 @@ Visualization Manager:
   Global Options:
     Background Color: 48; 48; 48
     Default Light: true
-    Fixed Frame: corner_tl_[130]
+    Fixed Frame: corner_tl_130
     Frame Rate: 30
   Name: root
   Tools:
@@ -132,17 +136,17 @@ Visualization Manager:
         Value: false
       Field of View: 0.7853981852531433
       Focal Point:
-        X: 0.6364666819572449
-        Y: 0.03066428378224373
-        Z: 0.3160339295864105
+        X: 1.0206289291381836
+        Y: -0.14017648994922638
+        Z: 0.087927907705307
       Focal Shape Fixed Size: true
       Focal Shape Size: 0.05000000074505806
       Invert Z Axis: false
       Name: Current View
       Near Clip Distance: 0.009999999776482582
-      Pitch: 1.0147968530654907
+      Pitch: 0.7497972249984741
       Target Frame: <Fixed Frame>
-      Yaw: 5.203587055206299
+      Yaw: 4.823588848114014
     Saved: ~
 Window Geometry:
   Displays:
