@@ -1,6 +1,7 @@
 # Mechalino_Arena
 
-## Final goal: Implement the SCPP algorithm to Mechalino robots
+## Final goal:
+Implement the SCPP algorithm to Mechalino robots
 
 ### Step 1.0:
 Visualize single layer Mechalino robots in Unity 3D with a ROS backend
@@ -15,4 +16,6 @@ Run the SCPP algorithm in ROS while robots are doing the movements and also deli
 ### Step 3.2:
 Use two-layer Mechalino robots to run the SCPP algorithm independently and Visualize the result in Unity 3D with a ROS backend
 
-For sure this is just a raw list and will change. 
+_____________________________________________________
+  For sure this is just a raw list and will change. 
+_____________________________________________________
