@@ -1,4 +1,4 @@
-# Mechalino_Arena
+# Mechalino Arena
 
 ## Final goal:
 Implement the SCPP algorithm to Mechalino robots
