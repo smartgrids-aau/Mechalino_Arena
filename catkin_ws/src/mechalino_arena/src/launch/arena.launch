@@ -15,5 +15,9 @@
         <rosparam command="load" file="$(find mechalino_arena)/param/camera_params.yaml" />
         <rosparam command="load" file="$(find mechalino_arena)/param/aruco_markers_params.yaml" />
     </node>
+    <node pkg="mechalino_arena" type="robots_publisher.py" name="robots_publisher" output="$(arg output)">
+        <rosparam command="load" file="$(find mechalino_arena)/param/camera_params.yaml" />
+        <rosparam command="load" file="$(find mechalino_arena)/param/aruco_markers_params.yaml" />
+    </node>
 
 </launch>
