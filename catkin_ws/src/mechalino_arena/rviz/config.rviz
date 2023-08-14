@@ -7,6 +7,7 @@ Panels:
         - /Global Options1
         - /Status1
         - /Image1
+        - /TF1
       Splitter Ratio: 0.5
     Tree Height: 517
   - Class: rviz/Selection
@@ -64,11 +65,42 @@ Visualization Manager:
       Transport Hint: raw
       Unreliable: false
       Value: true
+    - Class: rviz/TF
+      Enabled: true
+      Filter (blacklist): ""
+      Filter (whitelist): ""
+      Frame Timeout: 10000
+      Frames:
+        All Enabled: true
+        camera:
+          Value: true
+        corner_bl_[120]:
+          Value: true
+        corner_tl_[130]:
+          Value: true
+        corner_tr_[110]:
+          Value: true
+      Marker Alpha: 1
+      Marker Scale: 0.30000001192092896
+      Name: TF
+      Show Arrows: true
+      Show Axes: true
+      Show Names: true
+      Tree:
+        camera:
+          corner_bl_[120]:
+            {}
+          corner_tl_[130]:
+            {}
+          corner_tr_[110]:
+            {}
+      Update Interval: 0
+      Value: true
   Enabled: true
   Global Options:
     Background Color: 48; 48; 48
     Default Light: true
-    Fixed Frame: map
+    Fixed Frame: corner_tl_[130]
     Frame Rate: 30
   Name: root
   Tools:
@@ -92,7 +124,7 @@ Visualization Manager:
   Views:
     Current:
       Class: rviz/Orbit
-      Distance: 10
+      Distance: 3.0364365577697754
       Enable Stereo Rendering:
         Stereo Eye Separation: 0.05999999865889549
         Stereo Focal Distance: 1
@@ -100,17 +132,17 @@ Visualization Manager:
         Value: false
       Field of View: 0.7853981852531433
       Focal Point:
-        X: 0
-        Y: 0
-        Z: 0
+        X: 0.6364666819572449
+        Y: 0.03066428378224373
+        Z: 0.3160339295864105
       Focal Shape Fixed Size: true
       Focal Shape Size: 0.05000000074505806
       Invert Z Axis: false
       Name: Current View
       Near Clip Distance: 0.009999999776482582
-      Pitch: 0.785398006439209
+      Pitch: 1.0147968530654907
       Target Frame: <Fixed Frame>
-      Yaw: 0.785398006439209
+      Yaw: 5.203587055206299
     Saved: ~
 Window Geometry:
   Displays:

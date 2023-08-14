@@ -1,0 +1,9 @@
+corners_dictionary: 7 # 4x4_100
+
+corners_marker_size: 0.0925 # m
+
+tl_id: 130
+tr_id: 110
+br_id: 100
+bl_id: 120
+

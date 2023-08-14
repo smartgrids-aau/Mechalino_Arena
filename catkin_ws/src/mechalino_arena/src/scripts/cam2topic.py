@@ -5,7 +5,8 @@ import cv2
 from sensor_msgs.msg import Image
 from cv_bridge import CvBridge
 from v4l2ctl import Frame
-
+from PIL import Image as PILImage
+import io
 # initialize the cameras
 try:
     camera = Frame('/dev/video0')
@@ -18,15 +19,17 @@ def capture():
     try:
         byte_array = camera.get_frame()
 
-        # Convert the bytearray to a numpy array
+        # Open the image using PIL
         np_array = np.frombuffer(byte_array, dtype=np.uint8)
-        # Decode the numpy array to an OpenCV image
-        image = cv2.imdecode(np_array, cv2.IMREAD_COLOR)
+        pil_image = PILImage.open(io.BytesIO(np_array))
+
+        # Convert PIL image to OpenCV format
+        image = cv2.cvtColor(np.array(pil_image), cv2.COLOR_RGB2BGR) 
 
         return image
     
     except:
-        rospy.logerr("Failed to capture the image!")
+        rospy.logwarn("Failed to capture the image!")
 
 
 def undistort(image):
@@ -60,7 +63,7 @@ def camera_publisher():
             undistorted_image = bridge.cv2_to_imgmsg(undistorted_cv2_image)
             undistorted_image_pub.publish(undistorted_image)
         except Exception as e:
-            rospy.logerr("Failed to publish the image!" + str(e))
+            rospy.logwarn("Failed to publish the image!" + str(e))
 
 if __name__ == '__main__':
     try:
