@@ -120,9 +120,9 @@ def corners_publisher():
     camera_matrix = np.array(rospy.get_param('~camera_matrix'))
     distortion_coeffs = np.array(rospy.get_param('~dist_coeff'))
 
-    corners_dictionary = np.array(rospy.get_param('~corners_dictionary'))
+    corners_dictionary = int(rospy.get_param('~corners_dictionary'))
     detectorParams = aruco.DetectorParameters()
-    dictionary = aruco.getPredefinedDictionary(int(corners_dictionary))
+    dictionary = aruco.getPredefinedDictionary(corners_dictionary)
     aruco_marker_detector = aruco.ArucoDetector(dictionary, detectorParams)
     
     corners_marker_size = np.array(rospy.get_param('~corners_marker_size'))
@@ -141,7 +141,6 @@ def corners_publisher():
 
     broadcaster = tf.TransformBroadcaster()
 
-    # first 10 seconds publish corners every second
     rate = rospy.Rate(10)
     while not rospy.is_shutdown():
         corners_tf_publisher()
