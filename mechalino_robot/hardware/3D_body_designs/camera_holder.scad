@@ -1,0 +1,140 @@
+$fn = 100;
+/*
+union()
+{
+    translate([0.8,-2,2.3])
+    {
+        rotate([0,-180,0])
+        {
+            difference()
+            {
+                translate([0,2,0])
+                {
+                    cube([0.79,3.5,3.3]);
+                }
+                translate([-2.1,-0.1,2.3])
+                {
+                    cube([4.7,7,2.3]);
+                };
+                translate([0.25,-0.1,-0.3])
+                {
+                    cube([0.3,7,2.3]);
+                };
+                translate([-0.1,4.84,-0.3])
+                {
+                    cube([0.5,0.305,2.3]);
+                };
+                translate([-0.1,-0.1,-0.3])
+                {
+                    cube([0.5,0.65,2.3]);
+                };
+                translate([-0.1,6.25,-0.3])
+                {
+                    cube([0.5,1,2.3]);
+                };
+            }
+        }
+    }
+    
+    translate([0,0.75,0])
+    {
+        difference()
+        {
+            translate([0.01,0,2.2])
+                cube([0.24,2,5.1]);
+            translate([0.4,0.575,6])
+            {
+                rotate([0,-90,0])
+                {
+                    union()
+                    {
+                        cylinder(0.5,0.275,0.275);
+                        translate([0,-0.15,0])
+                            cube([1,0.3,0.5]);
+                        
+                        translate([0.98,0,0])
+                            cylinder(0.5,0.15,0.15);
+                    }
+                }
+            }
+            
+            translate([0.4,1.425,6])
+            {
+                rotate([0,-90,0])
+                {
+                    union()
+                    {
+                        cylinder(0.5,0.275,0.275);
+                        translate([0,-0.15,0])
+                            cube([1,0.3,0.5]);
+                        
+                        translate([0.98,0,0])
+                            cylinder(0.5,0.15,0.15);
+                    }
+                }
+            }
+        }
+    }
+}
+*/
+translate([-0.23,0.8,10])
+    {
+        difference()
+        {
+            translate([0.01,0,-3.5])
+                cube([0.24,2,16]);
+            translate([0.4,0.575,11])
+            {
+                rotate([0,-90,0])
+                {
+                    union()
+                    {
+                        cylinder(0.5,0.275,0.275);
+                        translate([0,-0.15,0])
+                            cube([1,0.3,0.5]);
+                        
+                        translate([0.98,0,0])
+                            cylinder(0.5,0.15,0.15);
+                    }
+                }
+            }
+            
+            translate([0.4,1.425,11])
+            {
+                rotate([0,-90,0])
+                {
+                    union()
+                    {
+                        cylinder(0.5,0.275,0.275);
+                        translate([0,-0.15,0])
+                            cube([1,0.3,0.5]);
+                        
+                        translate([0.98,0,0])
+                            cylinder(0.5,0.15,0.15);
+                    }
+                }
+            }
+        }
+        translate([0,1.425,-3])
+        {
+            rotate([0,90,0])cylinder(0.23+0.23+0.1,0.14,0.14);
+            translate([0.23+0.23+0.05,0,0])rotate([0,90,0])cylinder(0.2,0.270,0.270);
+        }
+        translate([0.01,0.575,-3])
+        {
+            rotate([0,90,0])cylinder(0.23+0.23+0.1,0.14,0.14);
+            translate([0.23+0.23+0.05,0,0])rotate([0,90,0])cylinder(0.2,0.270,0.270);
+        }
+    }
+/*rotate([0,90,0])
+{
+    translate([0,0,0])
+    {
+        union()
+        {
+            cylinder(0.5,0.275,0.275);
+            translate([0,-0.15,0])
+                cube([1,0.3,0.5]);
+        }
+    }
+}*/
