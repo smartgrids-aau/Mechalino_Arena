@@ -50,7 +50,7 @@ def publish_tvec(tvec, id):
 
     corner_frame_id += "_"+ str(id)
 
-    broadcaster.sendTransform((-1 * tvec[0], tvec[1], tvec[2]),
+    broadcaster.sendTransform((tvec[0], tvec[1], tvec[2]),
                             quaternion,
                             header.stamp,
                             corner_frame_id,
@@ -77,7 +77,7 @@ def corners_tf_publisher():
             retval, rvec, tvec = cv2.solvePnP(objPoints, markerCorners[i],camera_matrix,distortion_coeffs)
 
             # Invert the translation vector
-            inverted_tvec = -tvec
+            inverted_tvec = tvec
 
             
             inverted_tvec =np.reshape(inverted_tvec,(1,3))

@@ -82,6 +82,10 @@ Visualization Manager:
           Value: true
         corner_tr_110:
           Value: true
+        mechalino_15:
+          Value: true
+        mechalino_60:
+          Value: true
       Marker Alpha: 1
       Marker Scale: 0.30000001192092896
       Name: TF
@@ -98,13 +102,17 @@ Visualization Manager:
             {}
           corner_tr_110:
             {}
+          mechalino_15:
+            {}
+          mechalino_60:
+            {}
       Update Interval: 0
       Value: true
   Enabled: true
   Global Options:
     Background Color: 48; 48; 48
     Default Light: true
-    Fixed Frame: corner_tl_130
+    Fixed Frame: camera
     Frame Rate: 30
   Name: root
   Tools:
@@ -128,7 +136,7 @@ Visualization Manager:
   Views:
     Current:
       Class: rviz/Orbit
-      Distance: 3.0364365577697754
+      Distance: 1.6998624801635742
       Enable Stereo Rendering:
         Stereo Eye Separation: 0.05999999865889549
         Stereo Focal Distance: 1
@@ -136,17 +144,17 @@ Visualization Manager:
         Value: false
       Field of View: 0.7853981852531433
       Focal Point:
-        X: 1.0206289291381836
-        Y: -0.14017648994922638
-        Z: 0.087927907705307
+        X: 0.012472108006477356
+        Y: -0.16539445519447327
+        Z: 0.08829616010189056
       Focal Shape Fixed Size: true
       Focal Shape Size: 0.05000000074505806
       Invert Z Axis: false
       Name: Current View
       Near Clip Distance: 0.009999999776482582
-      Pitch: 0.7497972249984741
+      Pitch: -1.5697963237762451
       Target Frame: <Fixed Frame>
-      Yaw: 4.823588848114014
+      Yaw: 4.363585948944092
     Saved: ~
 Window Geometry:
   Displays:

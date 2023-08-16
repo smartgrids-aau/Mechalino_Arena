@@ -93,7 +93,7 @@ def robots_tf_publisher():
             inv_tvec = inverted_tvec
 
             robot_index = np.argmax(mechalino_ids == markerIds[i])
-            robot_pose_publishers[robot_index].update(inv_tvec,inv_rvec)
+            robot_pose_publishers[robot_index].update(tvec,rvec)
             
     except Exception as e:
         rospy.logerr("Error detecting robots: %s", str(e))
