@@ -78,19 +78,6 @@ def robots_tf_publisher():
                 continue
 
             retval, rvec, tvec = cv2.solvePnP(objPoints, markerCorners[i],camera_matrix,distortion_coeffs)
-            R, _ = cv2.Rodrigues(rvec)
-
-            # Invert the rotation matrix using its transpose
-            inverted_R = np.transpose(R)
-
-            # Invert the translation vector
-            inverted_tvec = -tvec
-
-            # Convert the inverted rotation matrix to an inverted rotation vector
-            inv_rvec, _ = cv2.Rodrigues(inverted_R)
-
-            # Express the inverted translation vector as it is
-            inv_tvec = inverted_tvec
 
             robot_index = np.argmax(mechalino_ids == markerIds[i])
             robot_pose_publishers[robot_index].update(tvec,rvec)
@@ -127,7 +114,7 @@ def robots_publisher():
     rospy.Subscriber("/camera/image", Image, image_callback)
 
     broadcaster = tf.TransformBroadcaster()
-    len_of_history = 5
+    len_of_history = 10
     robot_pose_publishers = []
     for id in mechalino_ids:
         robot_pose_publishers.append(robot_pose_publisher(id,broadcaster,len_of_history))

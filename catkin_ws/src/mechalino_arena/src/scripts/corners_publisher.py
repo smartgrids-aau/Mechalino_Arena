@@ -30,7 +30,7 @@ def publish_tvec(tvec, id):
     header.stamp = rospy.Time.now()
     header.frame_id = "camera"
     pose = PoseStamped(header=header)
-    pose.pose.position.x = -1 * tvec[0]
+    pose.pose.position.x = tvec[0]
     pose.pose.position.y = tvec[1]
     pose.pose.position.z = tvec[2]
     pose.pose.orientation.x = quaternion[0]
@@ -75,21 +75,17 @@ def corners_tf_publisher():
                 return
         for i in range(len(markerIds)):
             retval, rvec, tvec = cv2.solvePnP(objPoints, markerCorners[i],camera_matrix,distortion_coeffs)
-
-            # Invert the translation vector
-            inverted_tvec = tvec
-
             
-            inverted_tvec =np.reshape(inverted_tvec,(1,3))
+            tvec =np.reshape(tvec,(1,3))
 
             if markerIds[i] == tl_id:
-                tl_hist[history_index,:] = inverted_tvec
+                tl_hist[history_index,:] = tvec + objPoints[0]
             elif markerIds[i] == tr_id:
-                tr_hist[history_index,:] = inverted_tvec
+                tr_hist[history_index,:] = tvec + objPoints[1]
             elif markerIds[i] == br_id:
-                br_hist[history_index,:] = inverted_tvec
+                br_hist[history_index,:] = tvec + objPoints[2]
             elif markerIds[i] == bl_id:
-                bl_hist[history_index,:] = inverted_tvec
+                bl_hist[history_index,:] = tvec + objPoints[3]
 
         history_index = (history_index + 1) % len_of_histoty
 
