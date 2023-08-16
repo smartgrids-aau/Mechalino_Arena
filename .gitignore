@@ -125,3 +125,5 @@ qtcreator-*
 CATKIN_IGNORE
 
 .vscode
+
+.catkin_tools
