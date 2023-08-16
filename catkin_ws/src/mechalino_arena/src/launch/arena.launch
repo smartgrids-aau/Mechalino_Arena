@@ -20,4 +20,8 @@
         <rosparam command="load" file="$(find mechalino_arena)/param/aruco_markers_params.yaml" />
     </node>
 
+    <!-- Publish a fixed transform between camera_frame and table_frame -->
+    <node pkg="tf2_ros" type="static_transform_publisher" name="camera_tf_publisher"
+          args="0 0 1.1 0 3.141592653589793 0 camera table" />
+
 </launch>
