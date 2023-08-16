@@ -107,7 +107,8 @@ def corners_tf_publisher():
 
             
     except Exception as e:
-        rospy.logwarn("Error detecting corners: %s", str(e))
+        rospy.logerr("Error detecting corners: %s", str(e))
+        traceback.print_exc()
 
 def corners_publisher():
     global camera_matrix, distortion_coeffs, aruco_marker_detector, objPoints, broadcaster, tl_id, tr_id, br_id, bl_id
