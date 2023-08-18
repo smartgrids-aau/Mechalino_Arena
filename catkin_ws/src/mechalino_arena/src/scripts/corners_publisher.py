@@ -15,7 +15,7 @@ def image_callback(msg):
     global aruco_marker_detector
     global tl_id, tr_id, br_id, bl_id
     global camera_matrix, distortion_coeffs, objPoints
-    global tl_hist, tr_hist, br_hist, bl_hist, corners_sample_size
+    global tl_hist, tr_hist, br_hist, bl_hist, tableCornerHistoricalLength
 
     cv_image = cv_bridge.imgmsg_to_cv2(msg, desired_encoding="8UC3")
 
@@ -49,25 +49,25 @@ def image_callback(msg):
             elif markerIds[i] == bl_id:
                 bl_hist.append(tvec + objPoints[3])
 
-        if (len(tl_hist)==corners_sample_size):
-            tl_avg = np.average(np.array(tl_hist).reshape((corners_sample_size,3)),axis=0)
+        if (len(tl_hist)==tableCornerHistoricalLength):
+            tl_avg = np.average(np.array(tl_hist).reshape((tableCornerHistoricalLength,3)),axis=0)
             publish_tvec(tl_avg,tl_id)
-            tl_hist = []
+            tl_hist.clear()
 
-        if (len(tr_hist)==corners_sample_size):
-            tr_avg = np.average(np.array(tr_hist).reshape((corners_sample_size,3)),axis=0)
+        if (len(tr_hist)==tableCornerHistoricalLength):
+            tr_avg = np.average(np.array(tr_hist).reshape((tableCornerHistoricalLength,3)),axis=0)
             publish_tvec(tr_avg,tr_id)
-            tr_hist = []
+            tr_hist.clear()
 
-        if (len(br_hist)==corners_sample_size):
-            br_avg = np.average(np.array(br_hist).reshape((corners_sample_size,3)),axis=0)
+        if (len(br_hist)==tableCornerHistoricalLength):
+            br_avg = np.average(np.array(br_hist).reshape((tableCornerHistoricalLength,3)),axis=0)
             publish_tvec(br_avg,br_id)
-            br_hist = []
+            br_hist.clear()
 
-        if (len(bl_hist)==corners_sample_size):
-            bl_avg = np.average(np.array(bl_hist).reshape((corners_sample_size,3)),axis=0)
+        if (len(bl_hist)==tableCornerHistoricalLength):
+            bl_avg = np.average(np.array(bl_hist).reshape((tableCornerHistoricalLength,3)),axis=0)
             publish_tvec(bl_avg,bl_id)
-            bl_hist = []
+            bl_hist.clear()
             
     except Exception as e:
         rospy.logerr("Error detecting corners: %s", str(e))
@@ -127,7 +127,7 @@ if __name__ == '__main__':
         br_id = np.array(rospy.get_param('~br_id'))
         bl_id = np.array(rospy.get_param('~bl_id'))
 
-        corners_sample_size = 100
+        tableCornerHistoricalLength = int(rospy.get_param('~tableCornerHistoricalLength'))
 
         tl_hist = []
         tr_hist = []

@@ -7,6 +7,10 @@ tr_id: 110
 br_id: 100
 bl_id: 120
 
+tableCornerHistoricalLength: 100
+
+#-------------------------------------------------
+
 robots_dictionary: 1 # aruco.DICT_4x4_100
 
 robots_marker_size: 0.06 # m
@@ -14,3 +18,4 @@ robots_marker_size: 0.06 # m
 mechalino_ids:
   - [15, 60]
 
+robotPoseHistoricalLength: 100
