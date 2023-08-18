@@ -11,7 +11,7 @@ from geometry_msgs.msg import PoseStamped
 from std_msgs.msg import Header
 
 def image_callback(msg):
-    global cv_bridge, cv_image
+    global cv_bridge
     global aruco_marker_detector
     global tl_id, tr_id, br_id, bl_id
     global camera_matrix, distortion_coeffs, objPoints
