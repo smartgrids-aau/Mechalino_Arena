@@ -5,7 +5,6 @@ use <Head.scad>
 
 color("MediumBlue")main();
 
-
 translate([-10,10.1,0]) color("red") servo();
 mirror([0,1,0])translate([-9,10.1,0]) color("red") servo();
 translate([0,55,10])rotate([-90,0,0])color("Gray")wheels();
