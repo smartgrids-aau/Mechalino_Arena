@@ -25,7 +25,7 @@
 wheels();*/
 
 N=25;
-K = 20;
+K = 30;
 $fn = 100;
 epsilon = 0.01;
 big_cy = 6.75/2;
@@ -61,11 +61,9 @@ difference()
                     linear_extrude(servohead+epsilon*2)
                         circle(2,$fn=3);
         }
-    translate([0,0,-epsilon])cylinder(bottom_wall+epsilon*2,1,1);
+    translate([0,0,-epsilon])cylinder(bottom_wall+epsilon*2,1.6,1.6);
     
-    
-    translate([0,0,servohead])
-        for (k = [0:K]
-            cylinder(1/(k/K),big_cy,big_cy);
-    
+    translate([0,0,servohead-epsilon])
+        for (k = [0:K])
+            cylinder((bottom_joint/2)*(k/K),big_cy*(1-k/K),big_cy*(1-k/K));
 }
