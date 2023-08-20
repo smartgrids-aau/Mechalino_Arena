@@ -102,7 +102,7 @@ def publish_tvec(tvec, id):
     elif id == bl_id:
         corner_frame_id += "bl"
 
-    corner_frame_id += "_"+ str(id)
+    # corner_frame_id += "_"+ str(id)
 
     broadcaster.sendTransform((tvec[0], tvec[1], tvec[2]),
                             quaternion,

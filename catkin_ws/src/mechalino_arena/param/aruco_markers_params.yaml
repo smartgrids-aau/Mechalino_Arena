@@ -15,6 +15,6 @@ robots_dictionary: 1 # aruco.DICT_4x4_100
 
 robots_marker_size: 0.06 # m
 
-mechalino_ids: [15, 60]
+mechalino_ids: [15] # 60
 
 robotPoseHistoricalLength: 15
