@@ -20,7 +20,7 @@ def get_current_xy():
 if __name__ == '__main__':
     rospy.init_node('mechalino_data_logger')
     
-    mechalino_control = MechalinoControl('192.168.137.230')
+    mechalino_control = MechalinoControl()
     if mechalino_control is None:
         rospy.logerr("No bot was found at the specified IP address. Exiting ...")
         exit()

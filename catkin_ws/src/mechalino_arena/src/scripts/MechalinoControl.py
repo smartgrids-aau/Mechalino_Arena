@@ -23,6 +23,8 @@ class MechalinoControl:
     def __init__(self,ip = None):
         if ip is not None:
             self.ip = ip
+            if not check_ping(self.ip):
+                return None
         else:
             self.ip = input('please enter the robot\'s IP address:')
             if not check_ping(self.ip):

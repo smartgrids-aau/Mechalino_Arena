@@ -1,0 +1,12 @@
+<launch>
+    <arg name="output" default="screen" />
+    
+    <node pkg="scpp" type="grid_maintainer.py" name="grid_maintainer" output="$(arg output)">
+        <rosparam command="load" file="$(find scpp)/param/scpp_params.yaml" />
+    </node>
+
+    <!-- Publish a fixed transform between camera_frame and table_frame -->
+    <node pkg="tf2_ros" type="static_transform_publisher" name="grid_tf_publisher"
+          args="0 0 0 0 0 0 table grid" />
+
+</launch>

@@ -8,6 +8,7 @@ Panels:
         - /Status1
         - /Image1
         - /TF1
+        - /MarkerArray1
       Splitter Ratio: 0.5
     Tree Height: 517
   - Class: rviz/Selection
@@ -82,9 +83,9 @@ Visualization Manager:
           Value: true
         corner_tr_110:
           Value: true
-        mechalino_15:
+        grid:
           Value: true
-        mechalino_60:
+        mechalino_15:
           Value: true
         table:
           Value: true
@@ -107,9 +108,17 @@ Visualization Manager:
               {}
             mechalino_15:
               {}
-            mechalino_60:
-              {}
+          grid:
+            {}
       Update Interval: 0
+      Value: true
+    - Class: rviz/MarkerArray
+      Enabled: true
+      Marker Topic: /marker_array
+      Name: MarkerArray
+      Namespaces:
+        "": true
+      Queue Size: 100
       Value: true
   Enabled: true
   Global Options:
@@ -139,7 +148,7 @@ Visualization Manager:
   Views:
     Current:
       Class: rviz/Orbit
-      Distance: 2.047560930252075
+      Distance: 2.354971170425415
       Enable Stereo Rendering:
         Stereo Eye Separation: 0.05999999865889549
         Stereo Focal Distance: 1
