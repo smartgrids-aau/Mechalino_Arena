@@ -60,8 +60,8 @@ all: main-build
 main-build: STM32F4.elf secondary-outputs
 
 # Tool invocations
-STM32F4.elf STM32F4.map: $(OBJS) $(USER_OBJS) E:\Seafile\My\ Library\SwarmlyExplorerBot-master\SwarmlyExplorerBot-master\Stack1\ Codes\UC_code\STM32F4\STM32F401CCUX_FLASH.ld makefile objects.list $(OPTIONAL_TOOL_DEPS)
-	arm-none-eabi-gcc -o "STM32F4.elf" @"objects.list" $(USER_OBJS) $(LIBS) -mcpu=cortex-m4 -T"E:\Seafile\My Library\SwarmlyExplorerBot-master\SwarmlyExplorerBot-master\Stack1 Codes\UC_code\STM32F4\STM32F401CCUX_FLASH.ld" --specs=nosys.specs -Wl,-Map="STM32F4.map" -Wl,--gc-sections -static --specs=nano.specs -mfpu=fpv4-sp-d16 -mfloat-abi=hard -mthumb -Wl,--start-group -lc -lm -Wl,--end-group
+STM32F4.elf STM32F4.map: $(OBJS) $(USER_OBJS) E:\Seafile\My\ Library\Mechalino_Arena\mechalino_robot\software\layer_1\UC_code\STM32F4\STM32F401CCUX_FLASH.ld makefile objects.list $(OPTIONAL_TOOL_DEPS)
+	arm-none-eabi-gcc -o "STM32F4.elf" @"objects.list" $(USER_OBJS) $(LIBS) -mcpu=cortex-m4 -T"E:\Seafile\My Library\Mechalino_Arena\mechalino_robot\software\layer_1\UC_code\STM32F4\STM32F401CCUX_FLASH.ld" --specs=nosys.specs -Wl,-Map="STM32F4.map" -Wl,--gc-sections -static --specs=nano.specs -mfpu=fpv4-sp-d16 -mfloat-abi=hard -mthumb -Wl,--start-group -lc -lm -Wl,--end-group
 	@echo 'Finished building target: $@'
 	@echo ' '
 

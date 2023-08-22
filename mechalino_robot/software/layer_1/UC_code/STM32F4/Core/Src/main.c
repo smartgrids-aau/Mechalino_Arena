@@ -380,109 +380,52 @@ int main(void) {
 			}
 			case TURN_RIGHT: {
 				TIM11->CR1 |= TIM_CR1_CEN;
-				calib = 0;
-				mean = 0;
-				while (calib < CALIB_NUNBER) {
-					if (interrupt10ms == 1) {
-						interrupt10ms = 0;
-						MPU6050_Read_All(&hi2c1, &MPU6050);
-						mean += (MPU6050.Gz / 100);
-						calib++;
-					}
-				}
-				mean = mean / CALIB_NUNBER;
-
-				accel = 0;
-				//SPEED-UP
-				while(accel<100)
-				{
-					if (interrupt10ms == 1)
-					{
-						interrupt10ms = 0;
-						accel += 2*ACCELERATION;
-						if (accel > 100)
-							accel = 100;
-						motor(accel, accel);
-					}
-				}
-				angle = 0;
+				angle = -1; //-3 is a constant error (why?)
+				accel = 100;
+				motor(accel, accel);
 				while(angle < Argument)
 				{
 					if (interrupt10ms == 1)
 					{
+						if ((Argument - angle) < 15)
+						{
+							accel = 50;
+							motor(accel, accel);
+						}
 						MPU6050_Read_All(&hi2c1, &MPU6050);		//Read Accelerometer
 						angle -= (MPU6050.Gz / 100);
 						interrupt10ms = 0;
 					}
 				}
-				//SPEED-DOWN (break)
-				while(accel>0)
-				{
-					if (interrupt10ms == 1)
-					{
-						interrupt10ms = 0;
-						accel -= 5*ACCELERATION;
-						if (accel < 0)
-							accel = 0;
-						motor(accel, accel);
-					}
-				}
+				accel = 0;
+				motor(accel, accel);
 				interrupt10ms = 0;
 				TIM11->CR1 &= ~TIM_CR1_CEN;				//Disable Counter
 				TIM11->CNT = 0;							//reset Counter
 				ReciveOrder = '0';
 				break;
 			}
-			case TURN_LEFT: {
-
+			case TURN_LEFT: {						//reset Counter
 				TIM11->CR1 |= TIM_CR1_CEN;
-				calib = 0;
-				mean = 0;
-				while (calib < CALIB_NUNBER) {
-					if (interrupt10ms == 1) {
-						interrupt10ms = 0;
-						MPU6050_Read_All(&hi2c1, &MPU6050);
-						mean += (MPU6050.Gz / 100);
-						calib++;
-					}
-				}
-				mean = mean / CALIB_NUNBER;
-
-				accel = 0;
-				//SPEED-UP
-				while(accel<100)
-				{
-					if (interrupt10ms == 1)
-					{
-						interrupt10ms = 0;
-						accel += 2*ACCELERATION;
-						if (accel > 100)
-							accel = 100;
-						motor(-accel, -accel);
-					}
-				}
-				angle = 0;
+				angle = 6; //6 is a constant error (why?)
+				accel = 100;
+				motor(-accel, -accel);
 				while(angle < Argument)
 				{
 					if (interrupt10ms == 1)
 					{
+						if ((Argument - angle) < 15)
+						{
+							accel = 50;
+							motor(-accel, -accel);
+						}
 						MPU6050_Read_All(&hi2c1, &MPU6050);		//Read Accelerometer
 						angle += (MPU6050.Gz / 100);
 						interrupt10ms = 0;
 					}
 				}
-				//SPEED-DOWN (break)
-				while(accel>0)
-				{
-					if (interrupt10ms == 1)
-					{
-						interrupt10ms = 0;
-						accel -= 5*ACCELERATION;
-						if (accel < 0)
-							accel = 0;
-						motor(-accel, -accel);
-					}
-				}
+				accel = 0;
+				motor(-accel, -accel);
 				interrupt10ms = 0;
 				TIM11->CR1 &= ~TIM_CR1_CEN;				//Disable Counter
 				TIM11->CNT = 0;							//reset Counter
