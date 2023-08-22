@@ -25,45 +25,49 @@
 wheels();*/
 
 N=25;
-K = 30;
+K = 5;
 $fn = 100;
 epsilon = 0.01;
-big_cy = 6.75/2;
-big_cy_h = 5.5;
-hole = 2.9/2;
+big_cy = 6.85/2;
+big_cy_h = 4.5;
+servoHole = 1.1;
+servoheadR = 3;
 servohead = 3.5;
-bottom_joint = 2;
+bottom_joint = 0.8;
 bottom_wall = bottom_joint + servohead;
-wall=2;
-wheel_bounes=1.30;
-difference()
+wall=3;
+wheel_bounes=1.4;
+
+union()
 {
-    union()
+    difference()
     {
-        difference()
+        union()
         {
-            cylinder(bottom_wall+2*big_cy_h,big_cy+wall,big_cy+wall);
-            translate([0,0,bottom_wall])
-                cylinder(2*big_cy_h+epsilon*2,big_cy,big_cy);
-            for( i = [0:360/5:360])
+            difference()
             {
-                rotate([0,0,i])
-                    translate([0,0,bottom_wall+big_cy_h])
-                        cube([wheel_bounes,big_cy+wall+epsilon,big_cy_h+epsilon*2]);
-            }
+                cylinder(bottom_wall+2*big_cy_h,big_cy+wall,big_cy+wall);
+                translate([0,0,bottom_wall])
+                    cylinder(2*big_cy_h+epsilon*2,big_cy,big_cy);
+                for( i = [0:360/5:360])
+                {
+                    rotate([0,0,i])
+                        translate([0,0,bottom_wall+big_cy_h+1])
+                            cube([wheel_bounes,big_cy+wall+epsilon,big_cy_h+epsilon*2]);
+                }
+            };
         };
+        
+        translate([0,0,-epsilon])
+            for(i=[1:1:N]){
+                 rotate([0,0,(360/N)*i])
+                    translate([1.1,0])
+                        linear_extrude(servohead+epsilon*2)
+                            circle(2,$fn=3);
+            }
+        translate([0,0,-epsilon])
+            cylinder(big_cy_h+2*epsilon,1.55,1.55);
     };
     
-    translate([0,0,-epsilon])
-        for(i=[1:1:N]){
-             rotate([0,0,(360/N)*i])
-                translate([1.1,0])
-                    linear_extrude(servohead+epsilon*2)
-                        circle(2,$fn=3);
-        }
-    translate([0,0,-epsilon])cylinder(bottom_wall+epsilon*2,1.6,1.6);
     
-    translate([0,0,servohead-epsilon])
-        for (k = [0:K])
-            cylinder((bottom_joint/2)*(k/K),big_cy*(1-k/K),big_cy*(1-k/K));
 }
