@@ -43,7 +43,7 @@
 #define TURN_LEFT 4
 #define SPEED 75
 
-#define COEFF_CORRE 70
+#define COEFF_CORRE 71
 #define CALIB_NUNBER 100
 #define ACCELERATION 1
 char rx_buffer[20];
