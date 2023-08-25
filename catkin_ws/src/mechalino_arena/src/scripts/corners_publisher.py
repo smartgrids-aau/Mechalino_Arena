@@ -41,13 +41,13 @@ def image_callback(msg):
             tvec =np.reshape(tvec,(1,3))
 
             if markerIds[i] == tl_id:
-                tl_hist.append(tvec + objPoints[0])
+                tl_hist.append(tvec + 0*objPoints[0])
             elif markerIds[i] == tr_id:
-                tr_hist.append(tvec + objPoints[1])
+                tr_hist.append(tvec + 0*objPoints[1])
             elif markerIds[i] == br_id:
-                br_hist.append(tvec + objPoints[2])
+                br_hist.append(tvec + 0*objPoints[2])
             elif markerIds[i] == bl_id:
-                bl_hist.append(tvec + objPoints[3])
+                bl_hist.append(tvec + 0*objPoints[3])
 
         if (len(tl_hist)==tableCornerHistoricalLength):
             tl_avg = np.average(np.array(tl_hist).reshape((tableCornerHistoricalLength,3)),axis=0)
