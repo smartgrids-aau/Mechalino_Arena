@@ -36,7 +36,7 @@ def image_callback(msg):
         
         for i in range(len(markerIds)):
             if not (markerIds[i] in mechalino_ids):
-                rospy.logwarn(f"Invalid robot id detected: {id}")
+                rospy.logwarn(f"Invalid robot id detected: {markerIds[i]}")
                 continue
             
         for i in range(len(markerIds)):
