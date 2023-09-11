@@ -110,7 +110,7 @@ int main(void) {
 
 	/* USER CODE END 1 */
 
-	/* MCU Configuration--------------------------------------------------------*/
+	/* MCU Configuration-------------------------------*/
 
 	/* Reset of all peripherals, Initializes the Flash interface and the Systick. */
 	HAL_Init();
@@ -213,7 +213,6 @@ int main(void) {
 	int N = 50;
 	double sm = 0.0;
 	double mean = 0.0;
-	double current_face = 0.0;
 	double offset = 0.0;
 	int8_t turnvalue = 0, calib, accel, decel;
 	int i;
@@ -232,22 +231,6 @@ int main(void) {
 			USART_recive = 0;
 			HAL_GPIO_TogglePin(GPIOC, GPIO_PIN_13);	//toggle debug pin
 		}
-
-		// current face of robot is captured
-		TIM11->CR1 |= TIM_CR1_CEN;
-		calib = 0;
-		current_face = 0;
-		while (calib < CALIB_NUNBER) {
-			if (interrupt10ms == 1) {
-				interrupt10ms = 0;
-				MPU6050_Read_All(&hi2c1, &MPU6050);
-				current_face += (MPU6050.Gz / 100);
-				calib++;
-			}
-		}
-		current_face = current_face / CALIB_NUNBER;
-		TIM11->CR1 &= ~TIM_CR1_CEN;				//Disable Counter
-		TIM11->CNT = 0;
 
 		switch (ReciveOrder) {
 			case '0': {
@@ -280,13 +263,23 @@ int main(void) {
 				angle = 0;
 				TIM11->CR1 |= TIM_CR1_CEN;
 
-				//calibration has been done in advance
+				calib = 0;
+				mean = 0;
+				while (calib < CALIB_NUNBER) {
+					if (interrupt10ms == 1) {
+						interrupt10ms = 0;
+						MPU6050_Read_All(&hi2c1, &MPU6050);
+						mean += (MPU6050.Gz / 100);
+						calib++;
+					}
+				}
+				mean = mean / CALIB_NUNBER;
 
 				accel = 0;
 				decel = 0;
 				delay = 0;
 
-				accel = 100;
+				accel = Argument;
 				while (accel!=0)
 				{
 					if (interrupt10ms == 1)
@@ -294,7 +287,7 @@ int main(void) {
 						if (decel)//SLOW-DOWN
 						{
 							accel -= ACCELERATION;
-							if (accel < 10)
+							if (accel < 20)
 							{
 								accel = 0;
 							}
@@ -302,20 +295,18 @@ int main(void) {
 
 						interrupt10ms = 0;
 						MPU6050_Read_All(&hi2c1, &MPU6050);		//Read Accelerometer
-						angle += ((MPU6050.Gz / 100) - current_face) * COEFF_CORRE;
+						angle += ((MPU6050.Gz / 100) - mean) * COEFF_CORRE;
 						if (angle < 0)			//robot turn right must turn left
-								{
+						{
 							motor(accel + (int8_t) angle, -accel);
 						}
 						if (angle > 0)							//turn left
-								{
+						{
 							motor(accel, -accel + (int8_t) angle);
 						}
 
 						if (accel == 100)
 							delay++;
-						if(delay * 10 >= Argument)
-							decel = 1;
 					}
 
 					if (USART_recive == 1)
@@ -331,13 +322,23 @@ int main(void) {
 				angle = 0;
 				TIM11->CR1 |= TIM_CR1_CEN;
 
-				//calibration has been done in advance
+				calib = 0;
+				mean = 0;
+				while (calib < CALIB_NUNBER) {
+					if (interrupt10ms == 1) {
+						interrupt10ms = 0;
+						MPU6050_Read_All(&hi2c1, &MPU6050);
+						mean += (MPU6050.Gz / 100);
+						calib++;
+					}
+				}
+				mean = mean / CALIB_NUNBER;
 
 				accel = 0;
 				decel = 0;
 				delay = 0;
 
-				accel = 100;
+				accel = Argument;
 				while (accel!=0)
 				{
 					if (interrupt10ms == 1)
@@ -353,7 +354,7 @@ int main(void) {
 
 						interrupt10ms = 0;
 						MPU6050_Read_All(&hi2c1, &MPU6050);		//Read Accelerometer
-						angle += ((MPU6050.Gz / 100) - current_face) * COEFF_CORRE;
+						angle += ((MPU6050.Gz / 100) - mean) * COEFF_CORRE;
 						if (angle < 0)			//robot turn right must turn left
 								{
 							motor(-accel, accel  + (int8_t) angle);
@@ -365,8 +366,6 @@ int main(void) {
 
 						if (accel == 100)
 							delay++;
-						if(delay * 10 >= Argument)
-							decel = 1;
 					}
 
 					if (USART_recive == 1)
@@ -380,21 +379,38 @@ int main(void) {
 			}
 			case TURN_RIGHT: {
 				TIM11->CR1 |= TIM_CR1_CEN;
-				angle = -1; //-3 is a constant error (why?)
-				accel = 100;
+
+				calib = 0;
+				mean = 0;
+				while (calib < CALIB_NUNBER) {
+					if (interrupt10ms == 1) {
+						interrupt10ms = 0;
+						MPU6050_Read_All(&hi2c1, &MPU6050);
+						mean += (MPU6050.Gz / 100);
+						calib++;
+					}
+				}
+				mean = mean / CALIB_NUNBER;
+
+				angle = 0;
+				accel = 50;
 				motor(accel, accel);
 				while(angle < Argument)
 				{
 					if (interrupt10ms == 1)
 					{
-						if ((Argument - angle) < 15)
+						if ((Argument - angle) < 35)
 						{
-							accel = 50;
+							accel = 25;
 							motor(accel, accel);
 						}
 						MPU6050_Read_All(&hi2c1, &MPU6050);		//Read Accelerometer
-						angle -= (MPU6050.Gz / 100);
+						angle -= ((MPU6050.Gz / 100) - mean);
 						interrupt10ms = 0;
+					}
+					if (USART_recive == 1){
+						motor(0, 0);
+						break;
 					}
 				}
 				accel = 0;
@@ -405,30 +421,13 @@ int main(void) {
 				ReciveOrder = '0';
 				break;
 			}
-			case TURN_LEFT: {						//reset Counter
-				TIM11->CR1 |= TIM_CR1_CEN;
-				angle = 6; //6 is a constant error (why?)
-				accel = 100;
-				motor(-accel, -accel);
-				while(angle < Argument)
-				{
-					if (interrupt10ms == 1)
-					{
-						if ((Argument - angle) < 15)
-						{
-							accel = 50;
-							motor(-accel, -accel);
-						}
-						MPU6050_Read_All(&hi2c1, &MPU6050);		//Read Accelerometer
-						angle += (MPU6050.Gz / 100);
-						interrupt10ms = 0;
-					}
+			case TURN_LEFT: {
+				accel = Argument;
+				motor(accel, accel);
+				if (USART_recive == 1){
+					motor(0, 0);
+					break;
 				}
-				accel = 0;
-				motor(-accel, -accel);
-				interrupt10ms = 0;
-				TIM11->CR1 &= ~TIM_CR1_CEN;				//Disable Counter
-				TIM11->CNT = 0;							//reset Counter
 				ReciveOrder = '0';
 				break;
 			}

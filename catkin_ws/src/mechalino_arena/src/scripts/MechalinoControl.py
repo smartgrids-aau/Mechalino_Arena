@@ -31,18 +31,17 @@ class MechalinoControl:
                 return None
             
     def forward(self,duration=1.0):
-        url = f'http://{self.ip}/Robot1/?F={duration*1000:.0f}'
+        url = f'http://{self.ip}/Robot1/?F={duration:.0f}'
         self.make_get_request(url)
-        time.sleep(duration+1)
     def backward(self,duration=1.0):
-        url = f'http://{self.ip}/Robot1/?B={duration*1000:.0f}'
+        url = f'http://{self.ip}/Robot1/?B={duration:.0f}'
         self.make_get_request(url)
-        time.sleep(duration+1)
     def rotate_cw(self,degrees=90):
         url = f'http://{self.ip}/Robot1/?R={degrees}'
         self.make_get_request(url)
-        time.sleep(degrees/360*8)
     def rotate_ccw(self,degrees=90):
         url = f'http://{self.ip}/Robot1/?L={degrees}'
         self.make_get_request(url)
-        time.sleep(degrees/360*8)
+    def stop(self):
+        url = f'http://{self.ip}/Robot1/?0=0'
+        self.make_get_request(url)
