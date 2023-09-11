@@ -7,7 +7,7 @@ tr_id: 120
 br_id: 110
 bl_id: 100
 
-tableCornerHistoricalLength: 30
+tableCornerHistoricalLength: 25
 
 #-------------------------------------------------
 
@@ -17,4 +17,4 @@ robots_marker_size: 0.06 # m
 
 mechalino_ids: [15] # 60
 
-robotPoseHistoricalLength: 3
+robotPoseHistoricalLength: 30
