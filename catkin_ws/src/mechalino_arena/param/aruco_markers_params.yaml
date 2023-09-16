@@ -17,4 +17,4 @@ robots_marker_size: 0.06 # m
 
 mechalino_ids: [15] # 60
 
-robotPoseHistoricalLength: 30
+robotPoseHistoricalLength: 5
