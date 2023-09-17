@@ -124,18 +124,18 @@ if __name__ == '__main__':
         detectorParams = cv2.aruco.DetectorParameters()
         detectorParams.minMarkerPerimeterRate = 0.1
         detectorParams.maxMarkerPerimeterRate = 0.2
-        detectorParams.polygonalApproxAccuracyRate = 0.025 #0.05
-        detectorParams.minCornerDistanceRate = 0.005 #0.05
-        detectorParams.minOtsuStdDev = 6 # 5
+        detectorParams.polygonalApproxAccuracyRate = 0.01 #0.05
+        detectorParams.minCornerDistanceRate = 0.05 #0.05
+        detectorParams.minOtsuStdDev = 5 # 5
         detectorParams.perspectiveRemovePixelPerCell = 4 # 4
         detectorParams.perspectiveRemoveIgnoredMarginPerCell = 0.13 #0.13
-        detectorParams.maxErroneousBitsInBorderRate = 0.35 #0.35
-        detectorParams.errorCorrectionRate = 0.5 # 0.6
+        detectorParams.maxErroneousBitsInBorderRate = 0.1 #0.35
+        detectorParams.errorCorrectionRate = 0.3 # 0.6
 
         # Very important! These are important for pose estimation
-        detectorParams.cornerRefinementMethod = cv2.aruco.CORNER_REFINE_SUBPIX # CORNER_REFINE_NONE | CORNER_REFINE_SUBPIX | CORNER_REFINE_CONTOUR
+        detectorParams.cornerRefinementMethod = cv2.aruco.CORNER_REFINE_CONTOUR # CORNER_REFINE_NONE | CORNER_REFINE_SUBPIX | CORNER_REFINE_CONTOUR
         # for subpix
-        detectorParams.cornerRefinementWinSize = 4 # 5
+        detectorParams.cornerRefinementWinSize = 5 # 5
         detectorParams.cornerRefinementMaxIterations = 200 # 30
         detectorParams.cornerRefinementMinAccuracy = 0.05 # 0.1
 
