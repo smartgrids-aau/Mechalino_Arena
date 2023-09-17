@@ -437,7 +437,7 @@ int main(void) {
 				mean = mean / CALIB_NUNBER;
 
 				angle = 0;
-				accel = 50;
+				accel = -50;
 				motor(accel, accel);
 				while(angle < Argument)
 				{
@@ -445,11 +445,11 @@ int main(void) {
 					{
 						if ((Argument - angle) < 35)
 						{
-							accel = 25;
+							accel = -25;
 							motor(accel, accel);
 						}
 						MPU6050_Read_All(&hi2c1, &MPU6050);		//Read Accelerometer
-						angle -= ((MPU6050.Gz / 100) - mean);
+						angle += ((MPU6050.Gz / 100) - mean);
 						interrupt10ms = 0;
 					}
 					if (USART_recive == 1){

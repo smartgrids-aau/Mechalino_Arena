@@ -2922,8 +2922,8 @@ int main(void) {
  8001ba0:	f04f 0200 	mov.w	r2, #0
  8001ba4:	f04f 0300 	mov.w	r3, #0
  8001ba8:	e9c7 233e 	strd	r2, r3, [r7, #248]	; 0xf8
-				accel = 50;
- 8001bac:	2332      	movs	r3, #50	; 0x32
+				accel = -50;
+ 8001bac:	23ce      	movs	r3, #206	; 0xce
  8001bae:	f887 30e6 	strb.w	r3, [r7, #230]	; 0xe6
 				motor(accel, accel);
  8001bb2:	f997 30e6 	ldrsb.w	r3, [r7, #230]	; 0xe6
@@ -2959,8 +2959,8 @@ int main(void) {
  8001bf6:	2b00      	cmp	r3, #0
  8001bf8:	d00c      	beq.n	8001c14 <main+0xa74>
 						{
-							accel = 25;
- 8001bfa:	2319      	movs	r3, #25
+							accel = -25;
+ 8001bfa:	23e7      	movs	r3, #231	; 0xe7
  8001bfc:	f887 30e6 	strb.w	r3, [r7, #230]	; 0xe6
 							motor(accel, accel);
  8001c00:	f997 30e6 	ldrsb.w	r3, [r7, #230]	; 0xe6
@@ -2975,7 +2975,7 @@ int main(void) {
  8001c14:	492e      	ldr	r1, [pc, #184]	; (8001cd0 <main+0xb30>)
  8001c16:	482f      	ldr	r0, [pc, #188]	; (8001cd4 <main+0xb34>)
  8001c18:	f000 f92a 	bl	8001e70 <MPU6050_Read_All>
-						angle -= ((MPU6050.Gz / 100) - mean);
+						angle += ((MPU6050.Gz / 100) - mean);
  8001c1c:	4b2c      	ldr	r3, [pc, #176]	; (8001cd0 <main+0xb30>)
  8001c1e:	e9d3 010e 	ldrd	r0, r1, [r3, #56]	; 0x38
  8001c22:	f04f 0200 	mov.w	r2, #0
@@ -2990,7 +2990,7 @@ int main(void) {
  8001c3c:	4602      	mov	r2, r0
  8001c3e:	460b      	mov	r3, r1
  8001c40:	e9d7 013e 	ldrd	r0, r1, [r7, #248]	; 0xf8
- 8001c44:	f7fe fb28 	bl	8000298 <__aeabi_dsub>
+ 8001c44:	f7fe fb2a 	bl	800029c <__adddf3>
  8001c48:	4602      	mov	r2, r0
  8001c4a:	460b      	mov	r3, r1
  8001c4c:	e9c7 233e 	strd	r2, r3, [r7, #248]	; 0xf8
