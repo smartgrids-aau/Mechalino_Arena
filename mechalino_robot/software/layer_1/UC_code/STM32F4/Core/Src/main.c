@@ -422,12 +422,46 @@ int main(void) {
 				break;
 			}
 			case TURN_LEFT: {
-				accel = Argument;
-				motor(accel, accel);
-				if (USART_recive == 1){
-					motor(0, 0);
-					break;
+				TIM11->CR1 |= TIM_CR1_CEN;
+
+				calib = 0;
+				mean = 0;
+				while (calib < CALIB_NUNBER) {
+					if (interrupt10ms == 1) {
+						interrupt10ms = 0;
+						MPU6050_Read_All(&hi2c1, &MPU6050);
+						mean += (MPU6050.Gz / 100);
+						calib++;
+					}
 				}
+				mean = mean / CALIB_NUNBER;
+
+				angle = 0;
+				accel = 50;
+				motor(accel, accel);
+				while(angle < Argument)
+				{
+					if (interrupt10ms == 1)
+					{
+						if ((Argument - angle) < 35)
+						{
+							accel = 25;
+							motor(accel, accel);
+						}
+						MPU6050_Read_All(&hi2c1, &MPU6050);		//Read Accelerometer
+						angle -= ((MPU6050.Gz / 100) - mean);
+						interrupt10ms = 0;
+					}
+					if (USART_recive == 1){
+						motor(0, 0);
+						break;
+					}
+				}
+				accel = 0;
+				motor(accel, accel);
+				interrupt10ms = 0;
+				TIM11->CR1 &= ~TIM_CR1_CEN;				//Disable Counter
+				TIM11->CNT = 0;							//reset Counter
 				ReciveOrder = '0';
 				break;
 			}
