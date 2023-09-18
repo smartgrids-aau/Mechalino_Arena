@@ -1,13 +1,13 @@
 corners_dictionary: 7 # aruco.DICT_5x5_1000
 
-corners_marker_size: 0.0925 # m
+corners_marker_size: 0.105 # m
 
 tl_id: 130
 tr_id: 120
 br_id: 110
 bl_id: 100
 
-tableCornerHistoricalLength: 100
+tableCornerHistoricalLength: 25
 
 #-------------------------------------------------
 
@@ -17,4 +17,4 @@ robots_marker_size: 0.06 # m
 
 mechalino_ids: [15] # 60
 
-robotPoseHistoricalLength: 15
+robotPoseHistoricalLength: 5

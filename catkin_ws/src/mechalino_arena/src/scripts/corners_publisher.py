@@ -41,13 +41,13 @@ def image_callback(msg):
             tvec =np.reshape(tvec,(1,3))
 
             if markerIds[i] == tl_id:
-                tl_hist.append(tvec + objPoints[0])
+                tl_hist.append(tvec + 0*objPoints[0])
             elif markerIds[i] == tr_id:
-                tr_hist.append(tvec + objPoints[1])
+                tr_hist.append(tvec + 0*objPoints[1])
             elif markerIds[i] == br_id:
-                br_hist.append(tvec + objPoints[2])
+                br_hist.append(tvec + 0*objPoints[2])
             elif markerIds[i] == bl_id:
-                bl_hist.append(tvec + objPoints[3])
+                bl_hist.append(tvec + 0*objPoints[3])
 
         if (len(tl_hist)==tableCornerHistoricalLength):
             tl_avg = np.average(np.array(tl_hist).reshape((tableCornerHistoricalLength,3)),axis=0)
@@ -119,6 +119,26 @@ if __name__ == '__main__':
 
         corners_dictionary = int(rospy.get_param('~corners_dictionary'))
         detectorParams = aruco.DetectorParameters()
+
+        # not that important in our problem (these are important when detecting the marker)
+        detectorParams = cv2.aruco.DetectorParameters()
+        detectorParams.minMarkerPerimeterRate = 0.1
+        detectorParams.maxMarkerPerimeterRate = 0.2
+        detectorParams.polygonalApproxAccuracyRate = 0.025 #0.05
+        detectorParams.minCornerDistanceRate = 0.005 #0.05
+        detectorParams.minOtsuStdDev = 6 # 5
+        detectorParams.perspectiveRemovePixelPerCell = 4 # 4
+        detectorParams.perspectiveRemoveIgnoredMarginPerCell = 0.13 #0.13
+        detectorParams.maxErroneousBitsInBorderRate = 0.35 #0.35
+        detectorParams.errorCorrectionRate = 0.5 # 0.6
+
+        # Very important! These are important for pose estimation
+        detectorParams.cornerRefinementMethod = cv2.aruco.CORNER_REFINE_SUBPIX # CORNER_REFINE_NONE | CORNER_REFINE_SUBPIX | CORNER_REFINE_CONTOUR
+        # for subpix
+        detectorParams.cornerRefinementWinSize = 4 # 5
+        detectorParams.cornerRefinementMaxIterations = 200 # 30
+        detectorParams.cornerRefinementMinAccuracy = 0.05 # 0.1
+
         dictionary = aruco.getPredefinedDictionary(corners_dictionary)
         aruco_marker_detector = aruco.ArucoDetector(dictionary, detectorParams)
 

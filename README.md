@@ -15,6 +15,7 @@ Implement the SCPP algorithm to Mechalino robots
        
 _____________________________________________________
   **[Temporary note]** Current status:  After completing Step 1, the arena works in its elementary form. Working on the project is now pending the submission of my ***overdue articles***.
+  _____________________________________________________
   
   **[Temporary note]** This is just a raw list and will change. 
 _____________________________________________________

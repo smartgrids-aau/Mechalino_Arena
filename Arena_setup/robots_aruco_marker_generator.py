@@ -56,10 +56,10 @@ def put_image_in_circle(image, circle_diameter_cm, border_thickness):
 
 id = 15
 
-marker_size=169
+marker_size= 189
 circle_diameter_cm = 12
 border_thickness = 2
-margin = 100
+margin = 80
 
 aruco_dict = aruco.getPredefinedDictionary(aruco.DICT_4X4_100)
 
@@ -70,6 +70,12 @@ marker_image_rgb = cv2.cvtColor(marker_image, cv2.COLOR_GRAY2RGB)
 
 
 output_image = put_image_in_circle(marker_image_rgb, circle_diameter_cm, border_thickness)
+hs = output_image.shape[0]//2
+k = 12
+cv2.rectangle(output_image,(0,hs-k),(3*k,hs+k),[180,180,180])
+cv2.rectangle(output_image,(hs*2-3*k,hs-k),(hs*2,hs+k),[180,180,180])
+cv2.rectangle(output_image,(hs-k,0),(hs+k,3*k),[180,180,180])
+cv2.rectangle(output_image,(hs-k,hs*2-3*k),(hs+k,hs*2),[180,180,180])
 cv2.imwrite(f"robot_label_{id}.jpg", output_image)
 
 output_pdf = canvas.Canvas(f"robot_label_{id}.pdf", pagesize=(output_image.shape[1]+margin, output_image.shape[0]+margin))
