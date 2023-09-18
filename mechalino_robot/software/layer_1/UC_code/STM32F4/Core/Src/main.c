@@ -41,6 +41,7 @@
 #define BACkWARD 2
 #define TURN_RIGHT 3
 #define TURN_LEFT 4
+#define DIRECT_COMMAND 5
 #define SPEED 75
 
 #define COEFF_CORRE 71
@@ -120,6 +121,7 @@ int main(void) {
 	char ReciveOrder = ' ';
 	double angle, distance, derived;
 	int16_t Argument = 0;
+	int16_t Argument2 = 0;
 	int16_t delay;
 	/* USER CODE END Init */
 
@@ -225,8 +227,14 @@ int main(void) {
 		if (USART_recive == 1)	//if complete message is recived
 		{
 			Argument = 0;
-			ReciveOrder = rx_buffer[0];	//take the first argument
-			sscanf(&rx_buffer[1], "%d", &Argument);	//put the caractere chaine in number
+			ReciveOrder = rx_buffer[0];	//the command
+			if (ReciveOrder == 'C'){
+				char temp,temp2;
+				sscanf(&rx_buffer, "%c%hd%c%hd", &temp, &Argument, &temp2, &Argument2);
+				temp = 'd';
+			}
+			else
+				sscanf(&rx_buffer[1], "%d", &Argument);	//first param
 //		  Argument -= 10;
 			USART_recive = 0;
 			HAL_GPIO_TogglePin(GPIOC, GPIO_PIN_13);	//toggle debug pin
@@ -251,6 +259,10 @@ int main(void) {
 			}
 			case 'L': {
 				action = TURN_LEFT;
+				break;
+			}
+			case 'C': {
+				action = DIRECT_COMMAND;
 				break;
 			}
 		}
@@ -459,6 +471,24 @@ int main(void) {
 				}
 				accel = 0;
 				motor(accel, accel);
+				interrupt10ms = 0;
+				TIM11->CR1 &= ~TIM_CR1_CEN;				//Disable Counter
+				TIM11->CNT = 0;							//reset Counter
+				ReciveOrder = '0';
+				break;
+			}
+			case DIRECT_COMMAND:
+			{
+				TIM11->CR1 |= TIM_CR1_CEN;
+				int8_t a1;
+				int8_t a2;
+				a1 = (int8_t)Argument;
+				a2 = (int8_t)Argument2;
+				motor(Argument, Argument2);
+				while(USART_recive != 1)
+				{
+				}
+				motor(0, 0);
 				interrupt10ms = 0;
 				TIM11->CR1 &= ~TIM_CR1_CEN;				//Disable Counter
 				TIM11->CNT = 0;							//reset Counter
