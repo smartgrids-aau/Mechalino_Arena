@@ -7,8 +7,9 @@ from cv_bridge import CvBridge
 import cv2.aruco as aruco
 import traceback
 import tf
-from geometry_msgs.msg import PoseStamped
-from std_msgs.msg import Header
+import tf.transformations as tf_transformations
+from geometry_msgs.msg import TransformStamped
+import tf2_ros
 
 def image_callback(msg):
     global cv_bridge
@@ -65,27 +66,36 @@ def image_callback(msg):
 
 def publish_pose(tvec,rvec, id):
     global broadcaster
-    quaternion = tf.transformations.quaternion_from_euler(rvec[0],rvec[1],rvec[2])
 
-    header = Header()
-    header.stamp = rospy.Time.now()
-    header.frame_id = "camera"
-    pose = PoseStamped(header=header)
-    pose.pose.position.x = tvec[0]
-    pose.pose.position.y = tvec[1]
-    pose.pose.position.z = tvec[2]
-    pose.pose.orientation.x = quaternion[0]
-    pose.pose.orientation.y = quaternion[1]
-    pose.pose.orientation.z = quaternion[2]
-    pose.pose.orientation.w = quaternion[3]
+    # Convert rotation vector to rotation matrix
+    rotation_matrix, _ = cv2.Rodrigues(rvec)
+
+    # Extract Euler angles from rotation matrix
+    euler_angles = cv2.RQDecomp3x3(rotation_matrix)[0]
 
     robot_frame_id = f"mechalino_{id}"
 
-    broadcaster.sendTransform((tvec[0], tvec[1], tvec[2]),
-                            quaternion,
-                            header.stamp,
-                            robot_frame_id,
-                            "camera")
+    transform_stamped = TransformStamped()
+
+    transform_stamped.header.stamp = rospy.Time.now()
+    transform_stamped.header.frame_id = "camera"
+    transform_stamped.child_frame_id = robot_frame_id
+
+    # Set translation
+    transform_stamped.transform.translation.x = tvec[0]
+    transform_stamped.transform.translation.y = tvec[1]
+    transform_stamped.transform.translation.z = tvec[2]
+
+    # Convert rotation vector to quaternion
+    quaternion = tf_transformations.quaternion_from_euler(np.deg2rad(euler_angles[0]), np.deg2rad(euler_angles[1]), np.deg2rad(euler_angles[2]))
+
+    # Set rotation
+    transform_stamped.transform.rotation.x = quaternion[0]
+    transform_stamped.transform.rotation.y = quaternion[1]
+    transform_stamped.transform.rotation.z = quaternion[2]
+    transform_stamped.transform.rotation.w = quaternion[3]
+
+    broadcaster.sendTransform(transform_stamped)
 
 if __name__ == '__main__':
     try:
@@ -137,12 +147,12 @@ if __name__ == '__main__':
 
         robots_marker_size = np.array(rospy.get_param('~robots_marker_size'))
         objPoints = np.zeros((4, 1, 3))
-        objPoints[0] = np.array([-robots_marker_size/2.0, -robots_marker_size/2.0, 0])
-        objPoints[1] = np.array([robots_marker_size/2.0, -robots_marker_size/2.0, 0])
-        objPoints[2] = np.array([robots_marker_size/2.0, robots_marker_size/2.0, 0])
-        objPoints[3] = np.array([-robots_marker_size/2.0, robots_marker_size/2.0, 0])
+        objPoints[3] = np.array([-robots_marker_size/2.0, -robots_marker_size/2.0, 0])
+        objPoints[2] = np.array([robots_marker_size/2.0, -robots_marker_size/2.0, 0])
+        objPoints[1] = np.array([robots_marker_size/2.0, robots_marker_size/2.0, 0])
+        objPoints[0] = np.array([-robots_marker_size/2.0, robots_marker_size/2.0, 0])
 
-        broadcaster = tf.TransformBroadcaster()
+        broadcaster = tf2_ros.TransformBroadcaster()
 
         rospy.Subscriber("/camera/image", Image, image_callback)
         rospy.spin()

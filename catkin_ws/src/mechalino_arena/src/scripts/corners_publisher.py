@@ -7,9 +7,9 @@ from cv_bridge import CvBridge
 import cv2.aruco as aruco
 import traceback
 import tf
-from geometry_msgs.msg import PoseStamped
-from std_msgs.msg import Header
-
+import tf.transformations as tf_transformations
+from geometry_msgs.msg import TransformStamped
+import tf2_ros
 def image_callback(msg):
     global cv_bridge
     global aruco_marker_detector
@@ -25,7 +25,10 @@ def image_callback(msg):
         gray = cv2.cvtColor(cv_image, cv2.COLOR_BGR2GRAY)
 
         markerCorners, markerIds, _ = aruco_marker_detector.detectMarkers(gray)
-
+        if markerIds is None:
+            rospy.logwarn("No corners were detected!")
+            return
+        
         if (len(markerIds)!=4):
             rospy.logwarn("Not all 4 corners are detectable!")
             return
@@ -39,34 +42,39 @@ def image_callback(msg):
             retval, rvec, tvec = cv2.solvePnP(objPoints, markerCorners[i],camera_matrix,distortion_coeffs)
             
             tvec =np.reshape(tvec,(1,3))
+            rvec =np.reshape(rvec,(1,3))
 
             if markerIds[i] == tl_id:
-                tl_hist.append(tvec + 0*objPoints[0])
+                tl_hist.append([tvec,rvec])
             elif markerIds[i] == tr_id:
-                tr_hist.append(tvec + 0*objPoints[1])
+                tr_hist.append([tvec,rvec])
             elif markerIds[i] == br_id:
-                br_hist.append(tvec + 0*objPoints[2])
+                br_hist.append([tvec,rvec])
             elif markerIds[i] == bl_id:
-                bl_hist.append(tvec + 0*objPoints[3])
+                bl_hist.append([tvec,rvec])
 
         if (len(tl_hist)==tableCornerHistoricalLength):
-            tl_avg = np.average(np.array(tl_hist).reshape((tableCornerHistoricalLength,3)),axis=0)
-            publish_tvec(tl_avg,tl_id)
+            tl_avg_tvec = np.average(np.array(tl_hist)[:,0].reshape((tableCornerHistoricalLength,3)),axis=0)
+            tl_avg_rvec = np.average(np.array(tl_hist)[:,1].reshape((tableCornerHistoricalLength,3)),axis=0)
+            publish_tvec(tl_avg_tvec,tl_avg_rvec,tl_id)
             tl_hist.clear()
 
         if (len(tr_hist)==tableCornerHistoricalLength):
-            tr_avg = np.average(np.array(tr_hist).reshape((tableCornerHistoricalLength,3)),axis=0)
-            publish_tvec(tr_avg,tr_id)
+            tr_avg_tvec = np.average(np.array(tr_hist)[:,0].reshape((tableCornerHistoricalLength,3)),axis=0)
+            tr_avg_rvec = np.average(np.array(tr_hist)[:,1].reshape((tableCornerHistoricalLength,3)),axis=0)
+            publish_tvec(tr_avg_tvec,tr_avg_rvec,tr_id)
             tr_hist.clear()
 
         if (len(br_hist)==tableCornerHistoricalLength):
-            br_avg = np.average(np.array(br_hist).reshape((tableCornerHistoricalLength,3)),axis=0)
-            publish_tvec(br_avg,br_id)
+            br_avg_tvec = np.average(np.array(br_hist)[:,0].reshape((tableCornerHistoricalLength,3)),axis=0)
+            br_avg_rvec = np.average(np.array(br_hist)[:,1].reshape((tableCornerHistoricalLength,3)),axis=0)
+            publish_tvec(br_avg_tvec,br_avg_rvec,br_id)
             br_hist.clear()
 
         if (len(bl_hist)==tableCornerHistoricalLength):
-            bl_avg = np.average(np.array(bl_hist).reshape((tableCornerHistoricalLength,3)),axis=0)
-            publish_tvec(bl_avg,bl_id)
+            bl_avg_tvec = np.average(np.array(bl_hist)[:,0].reshape((tableCornerHistoricalLength,3)),axis=0)
+            bl_avg_rvec = np.average(np.array(bl_hist)[:,1].reshape((tableCornerHistoricalLength,3)),axis=0)
+            publish_tvec(bl_avg_tvec,bl_avg_rvec,bl_id)
             bl_hist.clear()
             
     except Exception as e:
@@ -76,21 +84,13 @@ def image_callback(msg):
         
 
 
-def publish_tvec(tvec, id):
+def publish_tvec(tvec, rvec, id):
     global broadcaster
-    quaternion = tf.transformations.quaternion_from_euler(0, 0, 0)
+    # Convert rotation vector to rotation matrix
+    rotation_matrix, _ = cv2.Rodrigues(rvec)
 
-    header = Header()
-    header.stamp = rospy.Time.now()
-    header.frame_id = "camera"
-    pose = PoseStamped(header=header)
-    pose.pose.position.x = tvec[0]
-    pose.pose.position.y = tvec[1]
-    pose.pose.position.z = tvec[2]
-    pose.pose.orientation.x = quaternion[0]
-    pose.pose.orientation.y = quaternion[1]
-    pose.pose.orientation.z = quaternion[2]
-    pose.pose.orientation.w = quaternion[3]
+    # Extract Euler angles from rotation matrix
+    euler_angles = cv2.RQDecomp3x3(rotation_matrix)[0]
 
     corner_frame_id = "corner_"
     if id == tl_id:
@@ -102,13 +102,27 @@ def publish_tvec(tvec, id):
     elif id == bl_id:
         corner_frame_id += "bl"
 
-    # corner_frame_id += "_"+ str(id)
+    transform_stamped = TransformStamped()
 
-    broadcaster.sendTransform((tvec[0], tvec[1], tvec[2]),
-                            quaternion,
-                            header.stamp,
-                            corner_frame_id,
-                            "camera")
+    transform_stamped.header.stamp = rospy.Time.now()
+    transform_stamped.header.frame_id = "camera"
+    transform_stamped.child_frame_id = corner_frame_id
+
+    # Set translation
+    transform_stamped.transform.translation.x = tvec[0]
+    transform_stamped.transform.translation.y = tvec[1]
+    transform_stamped.transform.translation.z = tvec[2]
+
+    # Convert rotation vector to quaternion
+    quaternion = tf_transformations.quaternion_from_euler(np.deg2rad(euler_angles[0]), np.deg2rad(euler_angles[1]), np.deg2rad(euler_angles[2]))
+
+    # Set rotation
+    transform_stamped.transform.rotation.x = quaternion[0]
+    transform_stamped.transform.rotation.y = quaternion[1]
+    transform_stamped.transform.rotation.z = quaternion[2]
+    transform_stamped.transform.rotation.w = quaternion[3]
+
+    broadcaster.sendTransform(transform_stamped)
 
 if __name__ == '__main__':
     try:
@@ -159,14 +173,14 @@ if __name__ == '__main__':
 
         corners_marker_size = np.array(rospy.get_param('~corners_marker_size'))
         objPoints = np.zeros((4, 1, 3))
-        objPoints[0] = np.array([-corners_marker_size/2.0, -corners_marker_size/2.0, 0])
-        objPoints[1] = np.array([corners_marker_size/2.0, -corners_marker_size/2.0, 0])
-        objPoints[2] = np.array([corners_marker_size/2.0, corners_marker_size/2.0, 0])
-        objPoints[3] = np.array([-corners_marker_size/2.0, corners_marker_size/2.0, 0])
+        objPoints[3] = np.array([-corners_marker_size/2.0, -corners_marker_size/2.0, 0])
+        objPoints[2] = np.array([corners_marker_size/2.0, -corners_marker_size/2.0, 0])
+        objPoints[1] = np.array([corners_marker_size/2.0, corners_marker_size/2.0, 0])
+        objPoints[0] = np.array([-corners_marker_size/2.0, corners_marker_size/2.0, 0])
 
-        broadcaster = tf.TransformBroadcaster()
+        broadcaster = tf2_ros.TransformBroadcaster()
 
         rospy.Subscriber("/camera/image", Image, image_callback)
         rospy.spin()
     except rospy.ROSInterruptException:
-        pass
+        print("ROSInterruptException")

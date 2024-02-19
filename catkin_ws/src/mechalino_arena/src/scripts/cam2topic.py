@@ -9,7 +9,7 @@ from PIL import Image as PILImage
 import io
 # initialize the cameras
 try:
-    camera = Frame('/dev/video0')
+    camera = Frame('/dev/video4')
 except Exception as e:
     rospy.logerr("Error: failed to connect to the camera!")
     raise e
