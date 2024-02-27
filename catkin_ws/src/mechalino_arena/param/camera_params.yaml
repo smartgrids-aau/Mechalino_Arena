@@ -1,6 +1,3 @@
-camera_id: 4
-image_width: 1920
-image_height: 1080
 camera_matrix:
 - - 1255.0433818767751
   - 0.0

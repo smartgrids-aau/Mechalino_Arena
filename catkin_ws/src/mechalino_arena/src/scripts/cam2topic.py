@@ -7,83 +7,63 @@ from cv_bridge import CvBridge
 from v4l2ctl import Frame
 from PIL import Image as PILImage
 import io
-import threading
+# initialize the cameras
+try:
+    camera = Frame('/dev/video4')
+except Exception as e:
+    rospy.logerr("Error: failed to connect to the camera!")
+    raise e
 
-# defined in the global scope, so that it can be accessed by the image_updater function {running inside the thread}
-capturer = None 
-image = None
-image_undistorted = None
-block_r = False
-block_w = False
-flag_new = False
-no_camera_detected = False
-camera_matrix, dist_coeff = None, None
+def capture():
+    global camera
+    try:
+        byte_array = camera.get_frame()
+
+        # Open the image using PIL
+        np_array = np.frombuffer(byte_array, dtype=np.uint8)
+        pil_image = PILImage.open(io.BytesIO(np_array))
+
+        # Convert PIL image to OpenCV format
+        image = cv2.cvtColor(np.array(pil_image), cv2.COLOR_RGB2BGR) 
+
+        return image
+    
+    except:
+        rospy.logwarn("Failed to capture the image!")
+
 
 def undistort(image):
-    global camera_matrix, dist_coeff
-    return cv2.undistort(image, camera_matrix, dist_coeff, None, camera_matrix)
-
-def image_updater():
-    global capturer, image, image_undistorted, block_r, block_w, flag_new, no_camera_detected
-    bridge = CvBridge()
-    while True:
-        try:
-            ret, image_c = capturer.read()
-            if not ret:
-                raise Exception('Camera not connected! Exiting capturer frame ...')
-            if not block_r:
-                block_w = True
-                image = bridge.cv2_to_imgmsg(image_c)
-                undistorted_cv2_image = undistort(image_c)
-                image_undistorted = bridge.cv2_to_imgmsg(undistorted_cv2_image)
-                flag_new = True
-                block_w = False
-        except Exception as e:
-            rospy.logerr(e)
-            no_camera_detected = True
-            break
-
-stream_thread = threading.Thread(target=image_updater)
+    global camera_matrix, distortion_coeffs
+    return cv2.undistort(image, camera_matrix, distortion_coeffs, None, camera_matrix)
 
 def camera_publisher():
-    global capturer, image, image_undistorted, block_r, block_w, flag_new, no_camera_detected, camera_matrix, dist_coeff
+    global camera
+    global camera_matrix, distortion_coeffs
+
     # Initialize the ROS node
     rospy.init_node('cam2topic', anonymous=True)
-    
-    camera_id = rospy.get_param('~camera_id')
-    capturer = cv2.VideoCapture(camera_id, cv2.CAP_ANY)
-    width = int(rospy.get_param('~image_width'))
-    height = int(rospy.get_param('~image_height'))
+
+    # load parameters
     camera_matrix = np.array(rospy.get_param('~camera_matrix'))
-    dist_coeff = np.array(rospy.get_param('~dist_coeff'))
-    capturer.set(cv2.CAP_PROP_FRAME_WIDTH, width)
-    capturer.set(cv2.CAP_PROP_FRAME_HEIGHT, height)
-    stream_thread.start()
+    distortion_coeffs = np.array(rospy.get_param('~dist_coeff'))
 
     # Create a publisher for the image topic
-    image_pub = rospy.Publisher('/camera/image', Image, queue_size=2)
-    image_undistorted_pub = rospy.Publisher('/camera/image/undistorted', Image, queue_size=2)
-
-    rate = rospy.Rate(30)  # Publish at 30 Hz
+    image_pub = rospy.Publisher('/camera/image', Image, queue_size=1)
+    undistorted_image_pub = rospy.Publisher('/camera/image/undistorted', Image, queue_size=1)
     
+    bridge = CvBridge()
     while not rospy.is_shutdown():
-        if no_camera_detected:
-            rospy.logerr('Camera not connected!')
-            break
-        else:
-            if not flag_new:
-                continue
-            flag_new = False
-            block_r = True
-            while(block_w):
-                continue
+        try:
+            cv2_image = capture()
+
+            image = bridge.cv2_to_imgmsg(cv2_image)
             image_pub.publish(image)
-            image_undistorted_pub.publish(image_undistorted)
-            block_r = False
 
-        rate.sleep()
-
-    capturer.release()
+            undistorted_cv2_image = undistort(cv2_image)
+            undistorted_image = bridge.cv2_to_imgmsg(undistorted_cv2_image)
+            undistorted_image_pub.publish(undistorted_image)
+        except Exception as e:
+            rospy.logwarn("Failed to publish the image!" + str(e))
 
 if __name__ == '__main__':
     try:
