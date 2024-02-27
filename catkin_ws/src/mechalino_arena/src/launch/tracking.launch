@@ -1,0 +1,27 @@
+<launch>
+    <arg name="output" default="screen" />
+    
+    <!-- overhead camera image provider node and viewing -->
+
+    <node pkg="mechalino_arena" type="cam2topic.py" name="cam2topic" output="$(arg output)">
+        <rosparam command="load" file="$(find mechalino_arena)/param/camera_params.yaml" />
+    </node>
+    
+    <node pkg="rviz" type="rviz" name="rviz" args="-d $(find mechalino_arena)/rviz/config.rviz"/>
+
+    <!-- +++++++++++++++++++++++++++++++++++++++++++++++ -->
+
+    <node pkg="mechalino_arena" type="corners_publisher.py" name="corners_publisher" output="$(arg output)">
+        <rosparam command="load" file="$(find mechalino_arena)/param/camera_params.yaml" />
+        <rosparam command="load" file="$(find mechalino_arena)/param/aruco_markers_params.yaml" />
+    </node>
+    <node pkg="mechalino_arena" type="robots_publisher.py" name="robots_publisher" output="$(arg output)">
+        <rosparam command="load" file="$(find mechalino_arena)/param/camera_params.yaml" />
+        <rosparam command="load" file="$(find mechalino_arena)/param/aruco_markers_params.yaml" />
+    </node>
+
+    <!-- Publish a fixed transform between camera_frame and table_frame -->
+    <node pkg="tf2_ros" type="static_transform_publisher" name="camera_tf_publisher"
+          args="0 0 1.35 0 0 0 table camera" />
+
+</launch>
