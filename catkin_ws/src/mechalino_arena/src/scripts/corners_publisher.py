@@ -10,13 +10,20 @@ import tf
 import tf.transformations as tf_transformations
 from geometry_msgs.msg import TransformStamped
 import tf2_ros
+import mechalino_arena_utility as ma_utility
+
+error_tl = 1000 # arbitrary large number
+error_tr = 1000 # arbitrary large number
+error_br = 1000 # arbitrary large number
+error_bl = 1000 # arbitrary large number
+
 def image_callback(msg):
     global cv_bridge
     global aruco_marker_detector
     global tl_id, tr_id, br_id, bl_id
     global camera_matrix, distortion_coeffs, objPoints
     global tl_hist, tr_hist, br_hist, bl_hist, tableCornerHistoricalLength
-
+    global error_tl, error_tr, error_br, error_bl
     cv_image = cv_bridge.imgmsg_to_cv2(msg, desired_encoding="8UC3")
 
     try:
@@ -40,7 +47,24 @@ def image_callback(msg):
             
         for i in range(len(markerIds)):
             retval, rvec, tvec = cv2.solvePnP(objPoints, markerCorners[i],camera_matrix,distortion_coeffs)
-            
+            error = ma_utility.calculate_reprojection_error(markerCorners[i], objPoints, rvec, tvec, camera_matrix, dist_coeffs=distortion_coeffs)
+            print(f"error: {error}")
+            if error < error_tl and markerIds[i] == tl_id:
+                error_tl = error
+            elif error < error_tr and markerIds[i] == tr_id:
+                error_tr = error
+            elif error < error_br and markerIds[i] == br_id:
+                error_br = error
+            elif error < error_bl and markerIds[i] == bl_id:
+                error_bl = error
+            else:
+                # increase all errors
+                error_tl += 0.01 # 1 cm
+                error_tr += 0.01 # 1 cm
+                error_br += 0.01 # 1 cm
+                error_bl += 0.01 # 1 cm
+                break
+
             tvec =np.reshape(tvec,(1,3))
             rvec =np.reshape(rvec,(1,3))
 
