@@ -11,6 +11,7 @@ import tf.transformations as tf_transformations
 from geometry_msgs.msg import TransformStamped
 import tf2_ros
 import mechalino_arena_utility as ma_utility
+from std_msgs.msg import Int32MultiArray
 
 error_tl = 1000 # arbitrary large number
 error_tr = 1000 # arbitrary large number
@@ -44,63 +45,65 @@ def image_callback(msg):
             if not (id in [tl_id,tr_id,br_id,bl_id]):
                 rospy.logwarn("Invalid id detected!")
                 return
-            
+        
+
+        corners_in_img_cord = np.zeros((4,2))
         for i in range(len(markerIds)):
             retval, rvec, tvec = cv2.solvePnP(objPoints, markerCorners[i],camera_matrix,distortion_coeffs)
             error = ma_utility.calculate_reprojection_error(markerCorners[i], objPoints, rvec, tvec, camera_matrix, dist_coeffs=distortion_coeffs)
-            print(f"error: {error}")
-            if error < error_tl and markerIds[i] == tl_id:
-                error_tl = error
-            elif error < error_tr and markerIds[i] == tr_id:
-                error_tr = error
-            elif error < error_br and markerIds[i] == br_id:
-                error_br = error
-            elif error < error_bl and markerIds[i] == bl_id:
-                error_bl = error
-            else:
-                # increase all errors
-                error_tl += 0.01 # 1 cm
-                error_tr += 0.01 # 1 cm
-                error_br += 0.01 # 1 cm
-                error_bl += 0.01 # 1 cm
-                break
+            # if error < error_tl and markerIds[i] == tl_id:
+            #     error_tl = error
+            # elif error < error_tr and markerIds[i] == tr_id:
+            #     error_tr = error
+            # elif error < error_br and markerIds[i] == br_id:
+            #     error_br = error
+            # elif error < error_bl and markerIds[i] == bl_id:
+            #     error_bl = error
+            # else:
+            #     # increase all errors
+            #     error_tl *= 1.005 # 0.5% increase
+            #     error_tr *= 1.005 # 0.5% increase
+            #     error_br *= 1.005 # 0.5% increase
+            #     error_bl *= 1.005 # 0.5% increase
+            #     continue
 
-            tvec =np.reshape(tvec,(1,3))
-            rvec =np.reshape(rvec,(1,3))
+            publish_tvec(tvec, rvec, markerIds[i])
 
+            # convert rvec and tvec to image cordiante system (pixels)
+            # if tl, move tvec to half marker size bottom and right
+            # if tr, move tvec to half marker size bottom and left
+            # if br, move tvec to half marker size top and left
+            # if bl, move tvec to half marker size top and right
             if markerIds[i] == tl_id:
-                tl_hist.append([tvec,rvec])
+                tvec[0] += corners_marker_size/2.0
+                tvec[1] += corners_marker_size/2.0
+                image_cord = ma_utility.convert_to_image_cord(rvec, tvec, camera_matrix, distortion_coeffs)
+                corners_in_img_cord[0] = image_cord
+                print("tl is located at: ", image_cord)
             elif markerIds[i] == tr_id:
-                tr_hist.append([tvec,rvec])
+                tvec[0] -= corners_marker_size/2.0
+                tvec[1] += corners_marker_size/2.0
+                image_cord = ma_utility.convert_to_image_cord(rvec, tvec, camera_matrix, distortion_coeffs)
+                corners_in_img_cord[1] = image_cord
+                print("tr is located at: ", image_cord)
             elif markerIds[i] == br_id:
-                br_hist.append([tvec,rvec])
+                tvec[0] -= corners_marker_size/2.0
+                tvec[1] -= corners_marker_size/2.0
+                image_cord = ma_utility.convert_to_image_cord(rvec, tvec, camera_matrix, distortion_coeffs)
+                corners_in_img_cord[2] = image_cord
+                print("br is located at: ", image_cord)
             elif markerIds[i] == bl_id:
-                bl_hist.append([tvec,rvec])
+                tvec[0] += corners_marker_size/2.0
+                tvec[1] -= corners_marker_size/2.0
+                image_cord = ma_utility.convert_to_image_cord(rvec, tvec, camera_matrix, distortion_coeffs)
+                corners_in_img_cord[3] = image_cord
+                print("bl is located at: ", image_cord)
+        # Create Int32MultiArray message
+        corners_in_img_cord = corners_in_img_cord.astype(int)
+        msg = Int32MultiArray()
+        msg.data = corners_in_img_cord.flatten().tolist()  # Flatten the array and convert to list
+        corners_in_img_cord_pub.publish(msg)
 
-        if (len(tl_hist)==tableCornerHistoricalLength):
-            tl_avg_tvec = np.average(np.array(tl_hist)[:,0].reshape((tableCornerHistoricalLength,3)),axis=0)
-            tl_avg_rvec = np.average(np.array(tl_hist)[:,1].reshape((tableCornerHistoricalLength,3)),axis=0)
-            publish_tvec(tl_avg_tvec,tl_avg_rvec,tl_id)
-            tl_hist.clear()
-
-        if (len(tr_hist)==tableCornerHistoricalLength):
-            tr_avg_tvec = np.average(np.array(tr_hist)[:,0].reshape((tableCornerHistoricalLength,3)),axis=0)
-            tr_avg_rvec = np.average(np.array(tr_hist)[:,1].reshape((tableCornerHistoricalLength,3)),axis=0)
-            publish_tvec(tr_avg_tvec,tr_avg_rvec,tr_id)
-            tr_hist.clear()
-
-        if (len(br_hist)==tableCornerHistoricalLength):
-            br_avg_tvec = np.average(np.array(br_hist)[:,0].reshape((tableCornerHistoricalLength,3)),axis=0)
-            br_avg_rvec = np.average(np.array(br_hist)[:,1].reshape((tableCornerHistoricalLength,3)),axis=0)
-            publish_tvec(br_avg_tvec,br_avg_rvec,br_id)
-            br_hist.clear()
-
-        if (len(bl_hist)==tableCornerHistoricalLength):
-            bl_avg_tvec = np.average(np.array(bl_hist)[:,0].reshape((tableCornerHistoricalLength,3)),axis=0)
-            bl_avg_rvec = np.average(np.array(bl_hist)[:,1].reshape((tableCornerHistoricalLength,3)),axis=0)
-            publish_tvec(bl_avg_tvec,bl_avg_rvec,bl_id)
-            bl_hist.clear()
-            
     except Exception as e:
         rospy.logerr("Error detecting corners: %s", str(e))
         traceback.print_exc()
@@ -110,6 +113,8 @@ def image_callback(msg):
 
 def publish_tvec(tvec, rvec, id):
     global broadcaster
+    global corners_in_img_cord_pub
+
     # Convert rotation vector to rotation matrix
     rotation_matrix, _ = cv2.Rodrigues(rvec)
 
@@ -185,13 +190,6 @@ if __name__ == '__main__':
         br_id = np.array(rospy.get_param('~br_id'))
         bl_id = np.array(rospy.get_param('~bl_id'))
 
-        tableCornerHistoricalLength = int(rospy.get_param('~tableCornerHistoricalLength'))
-
-        tl_hist = []
-        tr_hist = []
-        br_hist = []
-        bl_hist = []
-
         camera_matrix = np.array(rospy.get_param('~camera_matrix'))
         distortion_coeffs = np.array(rospy.get_param('~dist_coeff'))
 
@@ -203,7 +201,10 @@ if __name__ == '__main__':
         objPoints[0] = np.array([-corners_marker_size/2.0, corners_marker_size/2.0, 0])
 
         broadcaster = tf2_ros.TransformBroadcaster()
-
+        
+        # topic to publish x,y position of the corners in image cordiante system
+        # it is a numpy array of shape (4,2)
+        corners_in_img_cord_pub = rospy.Publisher('/corners_in_img_cord', Int32MultiArray, queue_size=10)
         rospy.Subscriber("/camera/image", Image, image_callback)
         rospy.spin()
     except rospy.ROSInterruptException:

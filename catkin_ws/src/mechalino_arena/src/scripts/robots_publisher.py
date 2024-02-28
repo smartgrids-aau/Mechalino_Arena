@@ -10,14 +10,15 @@ import tf
 import tf.transformations as tf_transformations
 from geometry_msgs.msg import TransformStamped
 import tf2_ros
+from geometry_msgs.msg import PoseStamped
 
 def image_callback(msg):
     global cv_bridge
     global aruco_marker_detector
     global mechalino_ids, number_of_specified_robots
     global camera_matrix, distortion_coeffs, objPoints
-    global robots_tvec_hist, robots_rvec_hist, robotPoseHistoricalLength
-
+    global broadcaster, pose_publishers
+    
     cv_image = cv_bridge.imgmsg_to_cv2(msg, desired_encoding="8UC3")
 
     try:
@@ -38,64 +39,60 @@ def image_callback(msg):
         for i in range(len(markerIds)):
             if not (markerIds[i] in mechalino_ids):
                 rospy.logwarn(f"Invalid robot id detected: {markerIds[i]}")
-                continue
+                return
             
         for i in range(len(markerIds)):
             retval, rvec, tvec = cv2.solvePnP(objPoints, markerCorners[i],camera_matrix,distortion_coeffs)
             
-            tvec =np.reshape(tvec,(1,3))
+            # tvec =np.reshape(tvec,(1,3))
 
-            for j in range(number_of_specified_robots):
-                if markerIds[i] == mechalino_ids[j]:
-                    robots_tvec_hist[j].append(tvec)
-                    robots_rvec_hist[j].append(rvec)
+            # Convert rotation vector to rotation matrix
+            rotation_matrix, _ = cv2.Rodrigues(rvec)
 
-                    if (len(robots_tvec_hist[j])==robotPoseHistoricalLength):
-                        robot_tvec_avg = np.average(np.array(robots_tvec_hist[j]).reshape((robotPoseHistoricalLength,3)),axis=0)
-                        robot_rvec_avg = np.average(np.array(robots_rvec_hist[j]).reshape((robotPoseHistoricalLength,3)),axis=0)
-                        publish_pose(robot_tvec_avg,robot_rvec_avg,mechalino_ids[j])
-                        robots_tvec_hist[j].clear()
-                        robots_rvec_hist[j].clear()
+            # Extract Euler angles from rotation matrix
+            euler_angles = cv2.RQDecomp3x3(rotation_matrix)[0]
+
+            robot_frame_id = f"mechalino_{id}"
+
+            transform_stamped = TransformStamped()
+
+            transform_stamped.header.stamp = rospy.Time.now()
+            transform_stamped.header.frame_id = "camera"
+            transform_stamped.child_frame_id = robot_frame_id
+
+            # Set translation
+            transform_stamped.transform.translation.x = tvec[0]
+            transform_stamped.transform.translation.y = tvec[1]
+            transform_stamped.transform.translation.z = tvec[2]
+
+            # Convert rotation vector to quaternion
+            quaternion = tf_transformations.quaternion_from_euler(np.deg2rad(euler_angles[0]), np.deg2rad(euler_angles[1]), np.deg2rad(euler_angles[2]))
+
+            # Set rotation
+            transform_stamped.transform.rotation.x = quaternion[0]
+            transform_stamped.transform.rotation.y = quaternion[1]
+            transform_stamped.transform.rotation.z = quaternion[2]
+            transform_stamped.transform.rotation.w = quaternion[3]
+
+            broadcaster.sendTransform(transform_stamped)
+
+            # Publish the pose
+            pose_stamped = PoseStamped()
+            pose_stamped.header.stamp = rospy.Time.now()
+            pose_stamped.header.frame_id = "camera"
+            pose_stamped.pose.position.x = tvec[0]
+            pose_stamped.pose.position.y = tvec[1]
+            pose_stamped.pose.position.z = tvec[2]
+            pose_stamped.pose.orientation.x = quaternion[0]
+            pose_stamped.pose.orientation.y = quaternion[1]
+            pose_stamped.pose.orientation.z = quaternion[2]
+            pose_stamped.pose.orientation.w = quaternion[3]
+            robot_index = np.where(mechalino_ids == markerIds[i])[0][0]
+            pose_publishers[robot_index].publish(pose_stamped)
             
     except Exception as e:
         rospy.logerr("Error detecting corners: %s", str(e))
         traceback.print_exc()
-
-        
-
-
-def publish_pose(tvec,rvec, id):
-    global broadcaster
-
-    # Convert rotation vector to rotation matrix
-    rotation_matrix, _ = cv2.Rodrigues(rvec)
-
-    # Extract Euler angles from rotation matrix
-    euler_angles = cv2.RQDecomp3x3(rotation_matrix)[0]
-
-    robot_frame_id = f"mechalino_{id}"
-
-    transform_stamped = TransformStamped()
-
-    transform_stamped.header.stamp = rospy.Time.now()
-    transform_stamped.header.frame_id = "camera"
-    transform_stamped.child_frame_id = robot_frame_id
-
-    # Set translation
-    transform_stamped.transform.translation.x = tvec[0]
-    transform_stamped.transform.translation.y = tvec[1]
-    transform_stamped.transform.translation.z = tvec[2]
-
-    # Convert rotation vector to quaternion
-    quaternion = tf_transformations.quaternion_from_euler(np.deg2rad(euler_angles[0]), np.deg2rad(euler_angles[1]), np.deg2rad(euler_angles[2]))
-
-    # Set rotation
-    transform_stamped.transform.rotation.x = quaternion[0]
-    transform_stamped.transform.rotation.y = quaternion[1]
-    transform_stamped.transform.rotation.z = quaternion[2]
-    transform_stamped.transform.rotation.w = quaternion[3]
-
-    broadcaster.sendTransform(transform_stamped)
 
 if __name__ == '__main__':
     try:
@@ -132,8 +129,6 @@ if __name__ == '__main__':
         mechalino_ids = np.array(rospy.get_param('~mechalino_ids'))
         number_of_specified_robots = len(mechalino_ids)
 
-        robotPoseHistoricalLength = int(rospy.get_param('~robotPoseHistoricalLength'))
-
         robots_tvec_hist = []
         for i in range(number_of_specified_robots):
             robots_tvec_hist.append([])
@@ -153,6 +148,10 @@ if __name__ == '__main__':
         objPoints[0] = np.array([-robots_marker_size/2.0, robots_marker_size/2.0, 0])
 
         broadcaster = tf2_ros.TransformBroadcaster()
+
+        pose_publishers = []
+        for i in range(len(mechalino_ids)):
+            pose_publishers.append(rospy.Publisher(f"mechalino_{mechalino_ids[i]}", PoseStamped, queue_size=10))
 
         rospy.Subscriber("/camera/image", Image, image_callback)
         rospy.spin()
