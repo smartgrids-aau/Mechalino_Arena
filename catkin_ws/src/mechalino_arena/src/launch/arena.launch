@@ -7,7 +7,8 @@
     <arg unless="$(arg table_view)" name="rviz_config" value="$(find mechalino_arena)/rviz/config.rviz" />
 
     <!-- overhead camera image provider node and viewing -->
-    <node pkg="mechalino_arena" type="cam2topic.py" name="cam2topic" output="$(arg output)">
+
+    <node pkg="mechalino_arena" type="udpcam2topic.py" name="udpcam2topic" output="$(arg output)">
         <rosparam command="load" file="$(find mechalino_arena)/param/camera_params.yaml" />
     </node>
     
