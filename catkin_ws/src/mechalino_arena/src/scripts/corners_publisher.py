@@ -48,62 +48,56 @@ def image_callback(msg):
         
 
         corners_in_img_cord = np.zeros((4,2))
+
+        # table center is average over corners
+        tvec_table = None
+        rotation_matrices_table = []
         for i in range(len(markerIds)):
             retval, rvec, tvec = cv2.solvePnP(objPoints, markerCorners[i],camera_matrix,distortion_coeffs)
+
+            # Convert rotation vector to rotation matrix
+            rotation_matrix, _ = cv2.Rodrigues(rvec)
+            
+
             error = ma_utility.calculate_reprojection_error(markerCorners[i], objPoints, rvec, tvec, camera_matrix, dist_coeffs=distortion_coeffs)
-            # if error < error_tl and markerIds[i] == tl_id:
-            #     error_tl = error
-            # elif error < error_tr and markerIds[i] == tr_id:
-            #     error_tr = error
-            # elif error < error_br and markerIds[i] == br_id:
-            #     error_br = error
-            # elif error < error_bl and markerIds[i] == bl_id:
-            #     error_bl = error
-            # else:
-            #     # increase all errors
-            #     error_tl *= 1.005 # 0.5% increase
-            #     error_tr *= 1.005 # 0.5% increase
-            #     error_br *= 1.005 # 0.5% increase
-            #     error_bl *= 1.005 # 0.5% increase
-            #     continue
 
-            publish_tvec(tvec, rvec, markerIds[i])
+            if tvec_table is None:
+                tvec_table = tvec
+            else:
+                tvec_table += tvec
+            rotation_matrices_table.append(rotation_matrix)
 
-            # convert rvec and tvec to image cordiante system (pixels)
-            # if tl, move tvec to half marker size bottom and right
-            # if tr, move tvec to half marker size bottom and left
-            # if br, move tvec to half marker size top and left
-            # if bl, move tvec to half marker size top and right
+            publish_tvec(tvec, rotation_matrix, markerIds[i])
+            
             if markerIds[i] == tl_id:
                 tvec[0] += corners_marker_size/2.0
                 tvec[1] += corners_marker_size/2.0
                 image_cord = ma_utility.convert_to_image_cord(rvec, tvec, camera_matrix, distortion_coeffs)
                 corners_in_img_cord[0] = image_cord
-                print("tl is located at: ", image_cord)
             elif markerIds[i] == tr_id:
                 tvec[0] -= corners_marker_size/2.0
                 tvec[1] += corners_marker_size/2.0
                 image_cord = ma_utility.convert_to_image_cord(rvec, tvec, camera_matrix, distortion_coeffs)
                 corners_in_img_cord[1] = image_cord
-                print("tr is located at: ", image_cord)
             elif markerIds[i] == br_id:
                 tvec[0] -= corners_marker_size/2.0
                 tvec[1] -= corners_marker_size/2.0
                 image_cord = ma_utility.convert_to_image_cord(rvec, tvec, camera_matrix, distortion_coeffs)
                 corners_in_img_cord[2] = image_cord
-                print("br is located at: ", image_cord)
             elif markerIds[i] == bl_id:
                 tvec[0] += corners_marker_size/2.0
                 tvec[1] -= corners_marker_size/2.0
                 image_cord = ma_utility.convert_to_image_cord(rvec, tvec, camera_matrix, distortion_coeffs)
                 corners_in_img_cord[3] = image_cord
-                print("bl is located at: ", image_cord)
         # Create Int32MultiArray message
         corners_in_img_cord = corners_in_img_cord.astype(int)
         msg = Int32MultiArray()
         msg.data = corners_in_img_cord.flatten().tolist()  # Flatten the array and convert to list
         corners_in_img_cord_pub.publish(msg)
 
+        tvec_table /= 4
+        rotation_matrices_table_avg = np.mean(rotation_matrices_table, axis=0)
+        publish_tvec(tvec_table,rotation_matrices_table_avg,"table")
     except Exception as e:
         rospy.logerr("Error detecting corners: %s", str(e))
         traceback.print_exc()
@@ -111,39 +105,37 @@ def image_callback(msg):
         
 
 
-def publish_tvec(tvec, rvec, id):
+def publish_tvec(tvec, rotation_matrix, id):
     global broadcaster
     global corners_in_img_cord_pub
 
-    # Convert rotation vector to rotation matrix
-    rotation_matrix, _ = cv2.Rodrigues(rvec)
-
     # Extract Euler angles from rotation matrix
     euler_angles = cv2.RQDecomp3x3(rotation_matrix)[0]
-
-    corner_frame_id = "corner_"
+    # Convert rotation vector to quaternion
+    quaternion = tf_transformations.quaternion_from_euler(np.deg2rad(euler_angles[0]), np.deg2rad(euler_angles[1]), np.deg2rad(euler_angles[2]))
+    
+    child_frame_id = "corner_"
     if id == tl_id:
-        corner_frame_id += "tl"
+        child_frame_id += "tl"
     elif id == tr_id:
-        corner_frame_id += "tr"
+        child_frame_id += "tr"
     elif id == br_id:
-        corner_frame_id += "br"
+        child_frame_id += "br"
     elif id == bl_id:
-        corner_frame_id += "bl"
+        child_frame_id += "bl"
+    else:
+        child_frame_id = "table"
 
     transform_stamped = TransformStamped()
 
     transform_stamped.header.stamp = rospy.Time.now()
     transform_stamped.header.frame_id = "camera"
-    transform_stamped.child_frame_id = corner_frame_id
+    transform_stamped.child_frame_id = child_frame_id
 
     # Set translation
     transform_stamped.transform.translation.x = tvec[0]
     transform_stamped.transform.translation.y = tvec[1]
     transform_stamped.transform.translation.z = tvec[2]
-
-    # Convert rotation vector to quaternion
-    quaternion = tf_transformations.quaternion_from_euler(np.deg2rad(euler_angles[0]), np.deg2rad(euler_angles[1]), np.deg2rad(euler_angles[2]))
 
     # Set rotation
     transform_stamped.transform.rotation.x = quaternion[0]
