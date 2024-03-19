@@ -13,97 +13,11 @@ import tf2_ros
 import mechalino_arena_utility as ma_utility
 from std_msgs.msg import Int32MultiArray
 
-error_tl = 1000 # arbitrary large number
-error_tr = 1000 # arbitrary large number
-error_br = 1000 # arbitrary large number
-error_bl = 1000 # arbitrary large number
+image = None
 
 def image_callback(msg):
-    global cv_bridge
-    global aruco_marker_detector
-    global tl_id, tr_id, br_id, bl_id
-    global camera_matrix, distortion_coeffs, objPoints
-    global tl_hist, tr_hist, br_hist, bl_hist, tableCornerHistoricalLength
-    global error_tl, error_tr, error_br, error_bl
-    cv_image = cv_bridge.imgmsg_to_cv2(msg, desired_encoding="8UC3")
-
-    try:
-        # Convert ROS Image message to OpenCV image using CvBridge
-        
-        gray = cv2.cvtColor(cv_image, cv2.COLOR_BGR2GRAY)
-
-        markerCorners, markerIds, _ = aruco_marker_detector.detectMarkers(gray)
-        if markerIds is None:
-            rospy.logwarn("No corners were detected!")
-            return
-        
-        if (len(markerIds)!=4):
-            rospy.logwarn("Not all 4 corners are detectable!")
-            return
-        
-        for id in markerIds:
-            if not (id in [tl_id,tr_id,br_id,bl_id]):
-                rospy.logwarn("Invalid id detected!")
-                return
-        
-
-        corners_in_img_cord = np.zeros((4,2))
-
-        # table center is average over corners
-        tvec_table = None
-        rotation_matrices_table = []
-        for i in range(len(markerIds)):
-            retval, rvec, tvec = cv2.solvePnP(objPoints, markerCorners[i],camera_matrix,distortion_coeffs)
-
-            # Convert rotation vector to rotation matrix
-            rotation_matrix, _ = cv2.Rodrigues(rvec)
-            
-
-            error = ma_utility.calculate_reprojection_error(markerCorners[i], objPoints, rvec, tvec, camera_matrix, dist_coeffs=distortion_coeffs)
-
-            if tvec_table is None:
-                tvec_table = tvec
-            else:
-                tvec_table += tvec
-            rotation_matrices_table.append(rotation_matrix)
-
-            publish_tvec(tvec, rotation_matrix, markerIds[i])
-            
-            if markerIds[i] == tl_id:
-                tvec[0] += corners_marker_size/2.0
-                tvec[1] += corners_marker_size/2.0
-                image_cord = ma_utility.convert_to_image_cord(rvec, tvec, camera_matrix, distortion_coeffs)
-                corners_in_img_cord[0] = image_cord
-            elif markerIds[i] == tr_id:
-                tvec[0] -= corners_marker_size/2.0
-                tvec[1] += corners_marker_size/2.0
-                image_cord = ma_utility.convert_to_image_cord(rvec, tvec, camera_matrix, distortion_coeffs)
-                corners_in_img_cord[1] = image_cord
-            elif markerIds[i] == br_id:
-                tvec[0] -= corners_marker_size/2.0
-                tvec[1] -= corners_marker_size/2.0
-                image_cord = ma_utility.convert_to_image_cord(rvec, tvec, camera_matrix, distortion_coeffs)
-                corners_in_img_cord[2] = image_cord
-            elif markerIds[i] == bl_id:
-                tvec[0] += corners_marker_size/2.0
-                tvec[1] -= corners_marker_size/2.0
-                image_cord = ma_utility.convert_to_image_cord(rvec, tvec, camera_matrix, distortion_coeffs)
-                corners_in_img_cord[3] = image_cord
-        # Create Int32MultiArray message
-        corners_in_img_cord = corners_in_img_cord.astype(int)
-        msg = Int32MultiArray()
-        msg.data = corners_in_img_cord.flatten().tolist()  # Flatten the array and convert to list
-        corners_in_img_cord_pub.publish(msg)
-
-        tvec_table /= 4
-        rotation_matrices_table_avg = np.mean(rotation_matrices_table, axis=0)
-        publish_tvec(tvec_table,rotation_matrices_table_avg,"table")
-    except Exception as e:
-        rospy.logerr("Error detecting corners: %s", str(e))
-        traceback.print_exc()
-
-        
-
+    global image
+    image = msg    
 
 def publish_tvec(tvec, rotation_matrix, id):
     global broadcaster
@@ -198,6 +112,84 @@ if __name__ == '__main__':
         # it is a numpy array of shape (4,2)
         corners_in_img_cord_pub = rospy.Publisher('/corners_in_img_cord', Int32MultiArray, queue_size=10)
         rospy.Subscriber("/camera/image", Image, image_callback)
-        rospy.spin()
+        
+        rate = rospy.Rate(2)  # Publish at 30 Hz
+        while not rospy.is_shutdown():
+            if image is not None:
+                cv_image = cv_bridge.imgmsg_to_cv2(image, desired_encoding="8UC3")
+                try:
+                    gray = cv2.cvtColor(cv_image, cv2.COLOR_BGR2GRAY)
+
+                    markerCorners, markerIds, _ = aruco_marker_detector.detectMarkers(gray)
+                    if markerIds is None:
+                        rospy.logwarn("No corners were detected!")
+                        continue
+                    
+                    if (len(markerIds)!=4):
+                        rospy.logwarn("Not all 4 corners are detectable!")
+                        continue
+                    
+                    for id in markerIds:
+                        if not (id in [tl_id,tr_id,br_id,bl_id]):
+                            rospy.logwarn("Invalid id detected!")
+                            continue
+                    
+
+                    corners_in_img_cord = np.zeros((4,2))
+
+                    # table center is average over corners
+                    tvec_table = None
+                    rotation_matrices_table = []
+                    for i in range(len(markerIds)):
+                        retval, rvec, tvec = cv2.solvePnP(objPoints, markerCorners[i],camera_matrix,distortion_coeffs)
+
+                        # Convert rotation vector to rotation matrix
+                        rotation_matrix, _ = cv2.Rodrigues(rvec)
+                        
+
+                        error = ma_utility.calculate_reprojection_error(markerCorners[i], objPoints, rvec, tvec, camera_matrix, dist_coeffs=distortion_coeffs)
+
+                        if tvec_table is None:
+                            tvec_table = tvec
+                        else:
+                            tvec_table += tvec
+                        rotation_matrices_table.append(rotation_matrix)
+
+                        publish_tvec(tvec, rotation_matrix, markerIds[i])
+                        
+                        if markerIds[i] == tl_id:
+                            tvec[0] += corners_marker_size/2.0
+                            tvec[1] += corners_marker_size/2.0
+                            image_cord = ma_utility.convert_to_image_cord(rvec, tvec, camera_matrix, distortion_coeffs)
+                            corners_in_img_cord[0] = image_cord
+                        elif markerIds[i] == tr_id:
+                            tvec[0] -= corners_marker_size/2.0
+                            tvec[1] += corners_marker_size/2.0
+                            image_cord = ma_utility.convert_to_image_cord(rvec, tvec, camera_matrix, distortion_coeffs)
+                            corners_in_img_cord[1] = image_cord
+                        elif markerIds[i] == br_id:
+                            tvec[0] -= corners_marker_size/2.0
+                            tvec[1] -= corners_marker_size/2.0
+                            image_cord = ma_utility.convert_to_image_cord(rvec, tvec, camera_matrix, distortion_coeffs)
+                            corners_in_img_cord[2] = image_cord
+                        elif markerIds[i] == bl_id:
+                            tvec[0] += corners_marker_size/2.0
+                            tvec[1] -= corners_marker_size/2.0
+                            image_cord = ma_utility.convert_to_image_cord(rvec, tvec, camera_matrix, distortion_coeffs)
+                            corners_in_img_cord[3] = image_cord
+                    # Create Int32MultiArray message
+                    corners_in_img_cord = corners_in_img_cord.astype(int)
+                    msg = Int32MultiArray()
+                    msg.data = corners_in_img_cord.flatten().tolist()  # Flatten the array and convert to list
+                    corners_in_img_cord_pub.publish(msg)
+
+                    tvec_table /= 4
+                    rotation_matrices_table_avg = np.mean(rotation_matrices_table, axis=0)
+                    publish_tvec(tvec_table,rotation_matrices_table_avg,"table")
+                except Exception as e:
+                    rospy.logerr("Error detecting corners: %s", str(e))
+                    traceback.print_exc()
+                rospy.loginfo("Table tf updated.")
+                rate.sleep()
     except rospy.ROSInterruptException:
         print("ROSInterruptException")

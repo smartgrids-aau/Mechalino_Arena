@@ -26,7 +26,7 @@ Panels:
   - Class: rviz/Time
     Name: Time
     SyncMode: 0
-    SyncSource: Image
+    SyncSource: PointCloud2
 Preferences:
   PromptSaveOnExit: true
 Toolbars:
@@ -173,17 +173,17 @@ Visualization Manager:
         Value: false
       Field of View: 1.5
       Focal Point:
-        X: 0.17297691106796265
-        Y: -0.11187855154275894
-        Z: 0.05400136485695839
+        X: -0.016459239646792412
+        Y: 0.14544889330863953
+        Z: 0.05425729602575302
       Focal Shape Fixed Size: true
       Focal Shape Size: 0.05000000074505806
       Invert Z Axis: false
       Name: Current View
       Near Clip Distance: 0.009999999776482582
-      Pitch: 1.5397963523864746
+      Pitch: 1.5697963237762451
       Target Frame: <Fixed Frame>
-      Yaw: 1.5150063037872314
+      Yaw: 4.705031871795654
     Saved: ~
 Window Geometry:
   Displays:
@@ -203,5 +203,5 @@ Window Geometry:
   Views:
     collapsed: false
   Width: 1337
-  X: 3143
-  Y: 0
+  X: 1223
+  Y: 27
