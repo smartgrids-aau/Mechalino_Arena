@@ -1,4 +1,5 @@
-camera_id: 4
+camera_server_ip: "192.168.111.1"
+camera_server_port: 9999
 image_width: 1920
 image_height: 1080
 camera_matrix:
