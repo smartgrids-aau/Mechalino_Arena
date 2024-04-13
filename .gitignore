@@ -129,3 +129,5 @@ CATKIN_IGNORE
 .catkin_tools
 
 *.gcode
+
+.*

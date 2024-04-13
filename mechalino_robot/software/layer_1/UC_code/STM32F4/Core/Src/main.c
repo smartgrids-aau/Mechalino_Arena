@@ -47,10 +47,6 @@
 #define COEFF_CORRE 71
 #define CALIB_NUNBER 100
 #define ACCELERATION 1
-char rx_buffer[20];
-char USART_recive = 0;
-uint8_t UART1_rxBuffer[2] = { 0 };
-uint8_t interrupt10ms = 0;
 /* USER CODE END PD */
 
 /* Private macro -------------------------------------------------------------*/
@@ -61,7 +57,10 @@ uint8_t interrupt10ms = 0;
 /* Private variables ---------------------------------------------------------*/
 
 /* USER CODE BEGIN PV */
-
+char rx_buffer[20];
+char USART_recive = 0;
+uint8_t UART1_rxBuffer[2] = { 0 };
+uint8_t interrupt10ms = 0;
 /* USER CODE END PV */
 
 /* Private function prototypes -----------------------------------------------*/
@@ -72,7 +71,7 @@ MPU6050_t MPU6050;
 
 /* Private user code ---------------------------------------------------------*/
 /* USER CODE BEGIN 0 */
-void HAL_UART_RxCpltCallback(UART_HandleTypeDef *huart) //go inside each time caractere is send on serial
+void HAL_UART_RxCpltCallback(UART_HandleTypeDef *huart) //go inside each time a character is send on serial
 {
 	static uint8_t length = 0;
 	HAL_UART_Receive_IT(&huart1, UART1_rxBuffer, 1);
@@ -113,7 +112,7 @@ int main(void) {
 
 	/* MCU Configuration-------------------------------*/
 
-	/* Reset of all peripherals, Initializes the Flash interface and the Systick. */
+	/* Reset of all peripherals, Initialises the Flash interface and the Systick. */
 	HAL_Init();
 
 	/* USER CODE BEGIN Init */
