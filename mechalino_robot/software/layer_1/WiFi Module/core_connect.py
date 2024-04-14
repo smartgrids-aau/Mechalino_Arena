@@ -1,9 +1,9 @@
 import requests
 
-server_ip = "192.168.137.60"
+server_ip = "192.168.137.15"
 server_port = 80
 
-url = f"http://{server_ip}:{server_port}/?data=M 0\r"
+url = f"http://{server_ip}:{server_port}/?data=M 50 1000\r"
 
 response = requests.get(url)
 

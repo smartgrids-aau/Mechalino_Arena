@@ -25,11 +25,21 @@
 /* Private includes ----------------------------------------------------------*/
 /* USER CODE BEGIN Includes */
 #include "mpu6050.h"
+#include <string.h>
+#include <stdlib.h>
+#include <stdio.h>
 /* USER CODE END Includes */
 
 /* Private typedef -----------------------------------------------------------*/
 /* USER CODE BEGIN PTD */
-
+typedef struct {
+	float kp;          // Proportional gain
+	float ki;          // Integral gain
+	float kd;          // Derivative gain
+    float setpoint;    // Target value
+    float integral;    // Integral sum
+    float prev_error;  // Previous error
+} PIDController;
 /* USER CODE END PTD */
 
 /* Private define ------------------------------------------------------------*/
@@ -59,6 +69,12 @@
 /* USER CODE BEGIN PV */
 MPU6050_t MPU6050;
 float Gz_mean = 0;
+float Ay_mean = 0;
+PIDController pid_m;
+PIDController pid_r;
+float current_Gz;
+float control_signal;
+float total_x = 0;
 
 int8_t speed = 0;
 int8_t current_speed = 0;
@@ -68,7 +84,7 @@ uint8_t rx_buffer_index = 0;
 char USART_recive = 0;
 uint8_t UART1_rxBuffer[1] = { 0 };
 char command = COMMAND_NC;
-int8_t Arg1, Arg2;
+int Arg1, Arg2;
 /* USER CODE END PV */
 
 /* Private function prototypes -----------------------------------------------*/
@@ -80,6 +96,24 @@ void apply_speed(); // applies the desired speed from -100 to 100 to robots.
 
 /* Private user code ---------------------------------------------------------*/
 /* USER CODE BEGIN 0 */
+void PID_init(PIDController *pid, float kp, float ki, float kd, float setpoint) {
+    pid->kp = kp;
+    pid->ki = ki;
+    pid->kd = kd;
+    pid->setpoint = setpoint;
+    pid->integral = 0;
+    pid->prev_error = 0;
+}
+
+float PID_compute(PIDController *pid, float input) {
+	float error = pid->setpoint - input;
+    pid->integral += error;
+    float derivative = error - pid->prev_error;
+    float output = pid->kp * error + pid->ki * pid->integral + pid->kd * derivative;
+    pid->prev_error = error;
+    return output;
+}
+
 void apply_speed()
 {
 	// if current_speed = 0, stop!
@@ -90,12 +124,17 @@ void apply_speed()
 		return;
 	}
 	// else
+	// PID control
+	MPU6050_Read_All(&hi2c1, &MPU6050);
+	current_Gz = MPU6050.Gz - Gz_mean;
+	control_signal = PID_compute(&pid_m, current_Gz)/2;
+
 	// core speed is a number in the range MOTOR_SLOW (>0) - MOTOR_MAX (<=100)
 	int core_speed =  (MOTOR_SLOW_1 - MOTOR_MAX_1) / 100 * abs(current_speed);
 	if (current_speed > 0) // forward
 	{
 		TIM1->CCR1 = MOTOR_SLOW_1 - core_speed;
-		TIM2->CCR3 = MOTOR_SLOW_2 + core_speed;
+		TIM2->CCR3 = MOTOR_SLOW_2 + core_speed - (int)control_signal;
 	}
 	else // backward
 	{
@@ -103,8 +142,16 @@ void apply_speed()
 		TIM2->CCR3 = MOTOR_SLOW_1 - core_speed;
 	}
 }
+
 void speed_ctl()
 {
+	// if current_speed = 0, stop!
+	if (current_speed == 0)
+	{
+		// renew PID controller, no I or D term should come from the previous movement
+		// params = Kp, Ki, Kd, setpoint = 0
+		PID_init(&pid_m, 0.1, 0, 0, 0);
+	}
 	if (current_speed != speed)
 	{
 		if (current_speed < speed)
@@ -121,6 +168,44 @@ void speed_ctl()
 		}
 	}
 	apply_speed();
+}
+
+void rotate(float angle)
+{
+	/*if (angle > 0)
+		angle -= 7;
+	else
+		angle += 7;*/
+	double total_Gz = 0;
+
+	int delay = 5;
+	// freeze the robot slowly
+	speed = 0;
+	while(current_speed != 0)
+		speed_ctl();
+
+	PID_init(&pid_r, 10, 0, 0, angle);
+	while (abs(abs(total_Gz) - abs(angle)) > 0.1)
+	{
+		control_signal = PID_compute(&pid_r, total_Gz);
+		if (control_signal > 0) // cw
+		{
+			TIM1->CCR1 = MOTOR_SLOW_1 - control_signal;
+			TIM2->CCR3 = MOTOR_SLOW_1 - control_signal;
+		}
+		else // ccw
+		{
+			TIM1->CCR1 = MOTOR_SLOW_2 + control_signal;;
+			TIM2->CCR3 = MOTOR_SLOW_2 + control_signal;;
+		}
+		HAL_Delay(delay);
+		MPU6050_Read_All(&hi2c1, &MPU6050);
+		current_Gz = (MPU6050.Gz - Gz_mean) * 1.18;
+		total_Gz += current_Gz / 1000.0f * delay;
+	}
+
+	TIM1->CCR1 = 0;
+	TIM2->CCR3 = 0;
 }
 /* USER CODE END 0 */
 
@@ -163,10 +248,11 @@ int main(void)
   // calibrate MPU6050
   for(uint8_t interations = 0; interations < CALIB; interations++)
   {
-	  MPU6050_Read_All(&hi2c1, &MPU6050);
 	  Gz_mean += MPU6050.Gz;
+	  Ay_mean += MPU6050.Ay;
   }
   Gz_mean /= CALIB;
+  Ay_mean /= CALIB;
 
   HAL_TIM_PWM_Init(&htim1);
   HAL_TIM_PWM_Init(&htim2);
@@ -182,75 +268,91 @@ int main(void)
   /* USER CODE BEGIN WHILE */
   while (1)
   {
-	  // check if there is any new command
-	  if (USART_recive == 1)
+	// check if there is any new command
+	if (USART_recive == 1)
+	{
+	  char *delimiter = " ";
+	  char *saveptr;
+	  char *token;
+	  token = strtok_r(rx_buffer, delimiter, &saveptr);
+	  if (token != NULL) {
+		  command = token[0];
+	  }
+	  else
 	  {
-		  char *delimiter = " ";
-		  char *saveptr;
-		  char *token;
-		  token = strtok_r(rx_buffer, delimiter, &saveptr);
+		  command = COMMAND_NC; // failed to read the command, so drop it
+	  }
+	  // commands with 1 or 2 arguments
+	  if (command == COMMAND_MOVE || command == COMMAND_ROTATE || command == COMMAND_LOCATION || command == COMMAND_GOAL)
+	  {
+		  token = strtok_r(NULL, delimiter, &saveptr);
 		  if (token != NULL) {
-			  command = token[0];
+			  Arg1 = atoi(token);
 		  }
 		  else
 		  {
-			  command = COMMAND_NC; // failed to read the command, so drop it
+			  command = COMMAND_NC; // failed to read arguments, so drop the command
 		  }
-		  // commands with 1 or 2 arguments
-		  if (command == COMMAND_MOVE || command == COMMAND_ROTATE || command == COMMAND_LOCATION || command == COMMAND_GOAL)
+		  // commands with a second argument
+		  if (command == COMMAND_MOVE || command == COMMAND_LOCATION || command == COMMAND_GOAL)
 		  {
 			  token = strtok_r(NULL, delimiter, &saveptr);
 			  if (token != NULL) {
-				  Arg1 = atoi(token);
+				  Arg2 = atoi(token);
 			  }
 			  else
 			  {
 				  command = COMMAND_NC; // failed to read arguments, so drop the command
 			  }
-			  // commands with a second argument
-			  if (command == COMMAND_LOCATION || command == COMMAND_GOAL)
-			  {
-				  token = strtok_r(NULL, delimiter, &saveptr);
-				  if (token != NULL) {
-					  Arg2 = atoi(token);
-				  }
-				  else
-				  {
-					  command = COMMAND_NC; // failed to read arguments, so drop the command
-				  }
-			  }
 		  }
-		  USART_recive = 0;
-		  HAL_UART_Transmit(&huart1, "OK!", sizeof("OK!"), 100);
 	  }
-	  // handle current command
-	  switch(command)
-	  {
-	  case COMMAND_NC:
-		  // nothing to do
-		  break;
-	  case COMMAND_HALT:
-		  // stop both movement and rotation
-		  speed = 0;
-		  command = COMMAND_NC; // command done
-		  break;
-	  case COMMAND_MOVE:
-		  // set speed
-		  speed = Arg1;
-		  command = COMMAND_NC; // command done
-	  default:
-		  // TODO: implementation of other commands
-		  break;
-	  }
+	  USART_recive = 0;
+	  HAL_UART_Transmit(&huart1, (uint8_t *)("OK!"), sizeof("OK!"), 100);
+	}
+	// handle current command
+	switch(command)
+	{
+	case COMMAND_NC:
+		// nothing to do
+		break;
+	case COMMAND_HALT:
+		// stop both movement and rotation
+		speed = 0;
+		command = COMMAND_NC; // command done
+		break;
+	case COMMAND_MOVE:
+		// set speed
+		speed = Arg1;
+		if (Arg2 == 0)
+			command = COMMAND_NC; // command done
+		break;
+	case COMMAND_ROTATE:
+		rotate(Arg1);
+		command = COMMAND_NC; // command done
+		break;
+	default:
+		// TODO: implementation of other commands
+		break;
+	}
 
-	  //robot speed
-	  speed_ctl();
-	  // TODO: robot rotation
-
-	  MPU6050_Read_All(&hi2c1, &MPU6050);
     /* USER CODE END WHILE */
 
     /* USER CODE BEGIN 3 */
+
+	//robot speed
+	MPU6050_Read_All(&hi2c1, &MPU6050);
+	speed_ctl();
+	HAL_Delay(100);
+	if (command == COMMAND_MOVE && Arg2 > 0)
+	{
+		Arg2 -= 100;
+		if (Arg2 <= 0)
+		{
+			speed = 0;
+			command = COMMAND_NC;
+		}
+	}
+	// TODO: robot rotation
   }
   /* USER CODE END 3 */
 }
