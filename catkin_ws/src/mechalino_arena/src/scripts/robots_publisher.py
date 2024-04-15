@@ -12,6 +12,7 @@ import tf.transformations as tf_trans
 from geometry_msgs.msg import TransformStamped
 import tf2_ros
 from geometry_msgs.msg import PoseStamped
+from std_msgs.msg import Float32MultiArray
 
 T_table_camera = None # global access
 
@@ -78,6 +79,12 @@ def image_callback(msg):
 
             # Broadcast the transform
             broadcaster.sendTransform(transform_stamped)
+
+            # Publish the pose of the robot
+            pose_data = Float32MultiArray(data=[T_robot_table[0, 3], T_robot_table[1, 3]])
+            robot_index = np.where(mechalino_ids == markerIds[i])[0][0]
+            pose_publishers[robot_index].publish(pose_data)
+
     except Exception as e:
         rospy.logerr("Error detecting corners: %s", str(e))
         traceback.print_exc()
@@ -132,14 +139,6 @@ if __name__ == '__main__':
         mechalino_ids = np.array(rospy.get_param('~mechalino_ids'))
         number_of_specified_robots = len(mechalino_ids)
 
-        robots_tvec_hist = []
-        for i in range(number_of_specified_robots):
-            robots_tvec_hist.append([])
-
-        robots_rvec_hist = []
-        for i in range(number_of_specified_robots):
-            robots_rvec_hist.append([])
-
         camera_matrix = np.array(rospy.get_param('~camera_matrix'))
         distortion_coeffs = np.array(rospy.get_param('~dist_coeff'))
 
@@ -154,7 +153,7 @@ if __name__ == '__main__':
 
         pose_publishers = []
         for i in range(len(mechalino_ids)):
-            pose_publishers.append(rospy.Publisher(f"mechalino_{mechalino_ids[i]}", PoseStamped, queue_size=10))
+            pose_publishers.append(rospy.Publisher(f"pos/mechalino_{mechalino_ids[i]}", Float32MultiArray, queue_size=1))
 
         rospy.Subscriber("/camera/image", Image, image_callback)
         rospy.spin()
