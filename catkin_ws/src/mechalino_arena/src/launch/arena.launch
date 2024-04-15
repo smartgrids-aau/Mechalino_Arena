@@ -17,10 +17,11 @@
 
     <!-- +++++++++++++++++++++++++++++++++++++++++++++++ -->
 
-    <node pkg="mechalino_arena" type="corners_publisher.py" name="corners_publisher" output="$(arg output)">
+    <node pkg="mechalino_arena" type="table_tf_publisher.py" name="table_tf_publisher" output="$(arg output)">
         <rosparam command="load" file="$(find mechalino_arena)/param/camera_params.yaml" />
         <rosparam command="load" file="$(find mechalino_arena)/param/aruco_markers_params.yaml" />
     </node>
+
     <node pkg="mechalino_arena" type="robots_publisher.py" name="robots_publisher" output="$(arg output)">
         <rosparam command="load" file="$(find mechalino_arena)/param/camera_params.yaml" />
         <rosparam command="load" file="$(find mechalino_arena)/param/aruco_markers_params.yaml" />
@@ -28,7 +29,7 @@
 
     <!-- +++++++++++++++++++++++++++++++++++++++++++++++ -->
     <!-- raw table point cloud -->
-    <node pkg="mechalino_arena" type="table_pc.py" name="table_pc" output="$(arg output)"/>
+    <!-- <node pkg="mechalino_arena" type="table_pc.py" name="table_pc" output="$(arg output)"/> -->
 
     <!-- Publish a fixed transform between camera_frame and table_frame -->
     <!-- <node pkg="tf2_ros" type="static_transform_publisher" name="camera_tf_publisher"
