@@ -79,7 +79,7 @@ float total_x = 0;
 int8_t speed = 0;
 int8_t current_speed = 0;
 
-char rx_buffer[20];
+char rx_buffer[30];
 uint8_t rx_buffer_index = 0;
 char USART_recive = 0;
 uint8_t UART1_rxBuffer[1] = { 0 };
@@ -130,16 +130,16 @@ void apply_speed()
 	control_signal = PID_compute(&pid_m, current_Gz)/2;
 
 	// core speed is a number in the range MOTOR_SLOW (>0) - MOTOR_MAX (<=100)
-	int core_speed =  (MOTOR_SLOW_1 - MOTOR_MAX_1) / 100 * abs(current_speed);
+	int core_speed =  (MOTOR_SLOW_1 - MOTOR_MAX_1) / 100.0f * abs(current_speed);
 	if (current_speed > 0) // forward
 	{
-		TIM1->CCR1 = MOTOR_SLOW_1 - core_speed;
+		TIM1->CCR1 = MOTOR_SLOW_1 - core_speed + (int)control_signal;
 		TIM2->CCR3 = MOTOR_SLOW_2 + core_speed - (int)control_signal;
 	}
 	else // backward
 	{
-		TIM1->CCR1 = MOTOR_SLOW_2 + core_speed;
-		TIM2->CCR3 = MOTOR_SLOW_1 - core_speed;
+		TIM1->CCR1 = MOTOR_SLOW_2 + core_speed - (int)control_signal;
+		TIM2->CCR3 = MOTOR_SLOW_1 - core_speed + (int)control_signal;
 	}
 }
 
@@ -150,11 +150,12 @@ void speed_ctl()
 	{
 		// renew PID controller, no I or D term should come from the previous movement
 		// params = Kp, Ki, Kd, setpoint = 0
-		PID_init(&pid_m, 0.1, 0, 0, 0);
+		PID_init(&pid_m, 1.5, 1, 0, 0);
 	}
 	if (current_speed != speed)
 	{
-		if (current_speed < speed)
+		current_speed = speed;
+		/*if (current_speed < speed)
 		{
 			current_speed += ACCELERATION;
 			if (current_speed > speed) // if it passed the desired speed
@@ -165,7 +166,7 @@ void speed_ctl()
 			current_speed -= ACCELERATION;
 			if (current_speed < speed)  // if it passed the desired speed
 				current_speed = speed;
-		}
+		}*/
 	}
 	apply_speed();
 }
@@ -248,6 +249,7 @@ int main(void)
   // calibrate MPU6050
   for(uint8_t interations = 0; interations < CALIB; interations++)
   {
+	  MPU6050_Read_All(&hi2c1, &MPU6050);
 	  Gz_mean += MPU6050.Gz;
 	  Ay_mean += MPU6050.Ay;
   }
@@ -412,7 +414,7 @@ void HAL_UART_RxCpltCallback(UART_HandleTypeDef *huart)
 
   rx_buffer[rx_buffer_index++] = UART1_rxBuffer[0];
 
-  if ((UART1_rxBuffer[0] == '\r') || rx_buffer_index > 10) // end of data
+  if ((UART1_rxBuffer[0] == '\r') || rx_buffer_index > 30) // end of data
   {
 	  rx_buffer_index = 0;
 	  USART_recive = 1;
