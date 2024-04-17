@@ -139,15 +139,7 @@ void apply_speed()
 		TIM2->CCR3 = MOTOR_STOP;
 		return;
 	}
-	// else
-	// PID control
-	current_Gz = MPU6050.Gz - Gz_mean;
-	total_Gz += current_Gz * (LOOP_DELAY / 1000.0f);
-	control_signal = PID_compute(&pid_m, total_Gz);
-
-	// core speed is a number in the range MOTOR_SLOW (>0) - MOTOR_MAX (<=100)
-	int core_speed =  (MOTOR_SLOW_1 - MOTOR_MAX_1) / 100.0f * abs(current_speed);
-	if (current_speed > 0) // forward
+	else
 	{
 		int speedR = MOTOR_MAX_1 - (int)control_signal;
 		if (speedR > MOTOR_SLOW_2)
@@ -167,37 +159,28 @@ void apply_speed()
 		{
 			speedL = MOTOR_MAX_2;
 		}
-		TIM1->CCR1 = speedR;
-		TIM2->CCR3 = speedL;
+		// PID control
+		current_Gz = MPU6050.Gz - Gz_mean;
+		total_Gz += current_Gz * (LOOP_DELAY / 1000.0f);
+		control_signal = PID_compute(&pid_m, total_Gz);
+
+		if (current_speed > 0) // forward
+		{
+			TIM1->CCR1 = speedR;
+			TIM2->CCR3 = speedL;
+		}
+		else
+		{
+			TIM2->CCR3 = speedR;
+			TIM1->CCR1 = speedL;
+		}
 	}
 }
 
 void speed_ctl()
 {
-	// if current_speed = 0, stop!
-	if (current_speed == 0)
-	{
-		// renew PID controller, no I or D term should come from the previous movement
-		// params = Kp, Ki, Kd, setpoint = 0
-		PID_init(&pid_m, kp, ki, kd, 0);
-	}
-	if (current_speed != speed)
-	{
-		current_speed = speed;
-		/*if (current_speed < speed)
-		{
-			current_speed += ACCELERATION;
-			if (current_speed > speed) // if it passed the desired speed
-				current_speed = speed;
-		}
-		else if (current_speed > speed)
-		{
-			current_speed -= ACCELERATION;
-			if (current_speed < speed)  // if it passed the desired speed
-				current_speed = speed;
-		}*/
-	}
-	apply_speed();
+	current_speed = speed;
+	PID_init(&pid_m, kp, ki, kd, 0);
 }
 
 void rotate(float angle)
@@ -206,10 +189,6 @@ void rotate(float angle)
 		angle -= R_offset_error;
 	else
 		angle += R_offset_error;
-	// freeze the robot slowly
-	speed = 0;
-	while(current_speed != 0)
-		speed_ctl();
 
 	total_Gz = 0;
 	PID_init(&pid_r, kp2, ki2, kd2, angle);
@@ -226,7 +205,6 @@ void rotate(float angle)
 	}
 	int fixStop = 150;
 	HAL_Delay(fixStop);
-	int uuu = 0;
 	while (fabs(total_Gz) < fabs(angle))
 	{
 		HAL_Delay(Rdelay);
@@ -236,7 +214,6 @@ void rotate(float angle)
 	}
 
 	TIM1->CCR1 = 0;
-	TIM2->CCR3 = 0;
 	TIM2->CCR3 = 0;
 }
 /* USER CODE END 0 */
@@ -322,7 +299,7 @@ int main(void)
 		  command = COMMAND_NC; // failed to read the command, so drop it
 	  }
 	  // commands with 1 or 2 arguments
-	  if (command == COMMAND_MOVE || command == COMMAND_ROTATE || command == COMMAND_LOCATION || command == COMMAND_GOAL)
+	  if (command == COMMAND_MOVE || command == COMMAND_ROTATE)
 	  {
 		  token = strtok_r(NULL, delimiter, &saveptr);
 		  if (token != NULL) {
@@ -333,7 +310,7 @@ int main(void)
 			  command = COMMAND_NC; // failed to read arguments, so drop the command
 		  }
 		  // commands with a second argument
-		  if (command == COMMAND_MOVE || command == COMMAND_LOCATION || command == COMMAND_GOAL)
+		  if (command == COMMAND_MOVE)
 		  {
 			  token = strtok_r(NULL, delimiter, &saveptr);
 			  if (token != NULL) {
@@ -374,7 +351,8 @@ int main(void)
 		  command = COMMAND_NC;
 	  }
 	  USART_recive = 0;
-	  HAL_UART_Transmit(&huart1, (uint8_t *)("OK!"), sizeof("OK!"), 100);
+	  if (command == COMMAND_NC)
+		  HAL_UART_Transmit(&huart1, (uint8_t *)("DONE"), sizeof("DONE"), 100);
 	}
 	// handle current command
 	switch(command)
@@ -385,17 +363,33 @@ int main(void)
 	case COMMAND_HALT:
 		// stop both movement and rotation
 		speed = 0;
+		speed_ctl();
+		apply_speed();
 		command = COMMAND_NC; // command done
+		HAL_UART_Transmit(&huart1, (uint8_t *)("DONE"), sizeof("DONE"), 100);
 		break;
 	case COMMAND_MOVE:
 		// set speed
 		speed = Arg1;
-		if (Arg2 == 0)
-			command = COMMAND_NC; // command done
+		speed_ctl();
+		apply_speed();
+		while(Arg2 > 0)
+		{
+			Arg2 -= LOOP_DELAY;
+			HAL_Delay(LOOP_DELAY);
+			MPU6050_Read_All(&hi2c1, &MPU6050);
+			apply_speed();
+		}
+		speed = 0;
+		speed_ctl();
+		apply_speed();
+		command = COMMAND_NC; // command done
+		HAL_UART_Transmit(&huart1, (uint8_t *)("DONE"), sizeof("DONE"), 100);
 		break;
 	case COMMAND_ROTATE:
 		rotate(Arg1);
 		command = COMMAND_NC; // command done
+		HAL_UART_Transmit(&huart1, (uint8_t *)("DONE"), sizeof("DONE"), 100);
 		break;
 	default:
 		// TODO: implementation of other commands
@@ -405,21 +399,6 @@ int main(void)
     /* USER CODE END WHILE */
 
     /* USER CODE BEGIN 3 */
-
-	//robot speed
-	MPU6050_Read_All(&hi2c1, &MPU6050);
-	speed_ctl();
-	HAL_Delay(LOOP_DELAY);
-	if (command == COMMAND_MOVE && Arg2 > 0)
-	{
-		Arg2 -= LOOP_DELAY;
-		if (Arg2 <= 0)
-		{
-			speed = 0;
-			command = COMMAND_NC;
-		}
-	}
-	// TODO: robot rotation
   }
   /* USER CODE END 3 */
 }
