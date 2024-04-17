@@ -75,7 +75,7 @@ double Ax_mean = 0;
 double Ay_mean = 0;
 PIDController pid_m;
 PIDController pid_r;
-float kp = 1000.0f;
+float kp = 1700.0f;
 float ki = 0.0f;
 float kd = 0.0f;
 float kp2 = 1.0f;
@@ -225,19 +225,15 @@ void rotate(float angle)
 		TIM2->CCR3 = MOTOR_MAX_2;
 	}
 	int fixStop = 150;
-	float conp = fixStop / Rdelay;
 	HAL_Delay(fixStop);
 	int uuu = 0;
-	float rot = 0.0f;
-	do
+	while (fabs(total_Gz) < fabs(angle))
 	{
 		HAL_Delay(Rdelay);
 		MPU6050_Read_All(&hi2c1, &MPU6050);
 		current_Gz = (MPU6050.Gz - Gz_mean) * (1+GzMul);
 		total_Gz += fabs(current_Gz * (Rdelay / 1000.0f));
-		uuu++;
-		rot = (total_Gz/uuu)*(uuu+conp);
-	} while (fabs(rot) < fabs(angle));
+	}
 
 	TIM1->CCR1 = 0;
 	TIM2->CCR3 = 0;

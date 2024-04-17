@@ -5,22 +5,34 @@ server_ip = "192.168.137.70"
 server_port = 80
 
 #url = f"http://{server_ip}:{server_port}/?data=P 100 4000 1000 0 0\r"
-url = f"http://{server_ip}:{server_port}/?data=X 1 0 0 0.0 22.185 10\r"
-
+url = f"http://{server_ip}:{server_port}/?data=P 1200 0 0\r"
 response = requests.get(url)
-
-if response.status_code == 200:
-    print("GET request sent successfully.")
-else:
-    print(f"Failed to send GET request. Status code: {response.status_code}")
-
 time.sleep(2.5)
-
-url = f"http://{server_ip}:{server_port}/?data=R 270\r"
-
+url = f"http://{server_ip}:{server_port}/?data=X 1 0 0 0.0 18.5 10\r"
 response = requests.get(url)
-
-if response.status_code == 200:
-    print("GET request sent successfully.")
-else:
-    print(f"Failed to send GET request. Status code: {response.status_code}")
+time.sleep(2.5)
+for i in range(4):
+    url = f"http://{server_ip}:{server_port}/?data=M 100 4000\r"
+    response = requests.get(url)
+    time.sleep(5)
+    url = f"http://{server_ip}:{server_port}/?data=R -90\r"
+    response = requests.get(url)
+    time.sleep(2)
+    url = f"http://{server_ip}:{server_port}/?data=M 100 1000\r"
+    response = requests.get(url)
+    time.sleep(2)
+    url = f"http://{server_ip}:{server_port}/?data=R -90\r"
+    response = requests.get(url)
+    time.sleep(2)
+    url = f"http://{server_ip}:{server_port}/?data=M 100 4000\r"
+    response = requests.get(url)
+    time.sleep(5)
+    url = f"http://{server_ip}:{server_port}/?data=R 90\r"
+    response = requests.get(url)
+    time.sleep(2)
+    url = f"http://{server_ip}:{server_port}/?data=M 100 1000\r"
+    response = requests.get(url)
+    time.sleep(2)
+    url = f"http://{server_ip}:{server_port}/?data=R 90\r"
+    response = requests.get(url)
+    time.sleep(2)
