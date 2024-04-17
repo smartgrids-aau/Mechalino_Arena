@@ -28,6 +28,7 @@
 #include <string.h>
 #include <stdlib.h>
 #include <stdio.h>
+#include <math.h>
 /* USER CODE END Includes */
 
 /* Private typedef -----------------------------------------------------------*/
@@ -44,12 +45,13 @@ typedef struct {
 
 /* Private define ------------------------------------------------------------*/
 /* USER CODE BEGIN PD */
-#define CALIB 100
+#define CALIB 1000
+#define LOOP_DELAY 10
 #define ACCELERATION 5 // must be a divisor of 100! No check is being done!
-#define MOTOR_MAX_1 800
+#define MOTOR_MAX_1 1400 //800
 #define MOTOR_SLOW_1 2800
 #define MOTOR_STOP 3000
-#define MOTOR_MAX_2 5100
+#define MOTOR_MAX_2 4500 //5100
 #define MOTOR_SLOW_2 3100
 #define COMMAND_NC 'N' // no command
 #define COMMAND_MOVE 'M' // set movement speed (& direction)
@@ -68,11 +70,24 @@ typedef struct {
 
 /* USER CODE BEGIN PV */
 MPU6050_t MPU6050;
-float Gz_mean = 0;
-float Ay_mean = 0;
+double Gz_mean = 0;
+double Ax_mean = 0;
+double Ay_mean = 0;
 PIDController pid_m;
 PIDController pid_r;
+float kp = 1000.0f;
+float ki = 0.0f;
+float kd = 0.0f;
+float kp2 = 1.0f;
+float ki2 = 0.1f;
+float kd2 = 0.0f;
+float GzMul = 0.0f;
+int Gzs[1000];
+int Gzs_index = 0;
+int Rdelay = 5;
+float R_offset_error = 0.0f;
 float current_Gz;
+float total_Gz = 0;
 float control_signal;
 float total_x = 0;
 
@@ -103,6 +118,7 @@ void PID_init(PIDController *pid, float kp, float ki, float kd, float setpoint) 
     pid->setpoint = setpoint;
     pid->integral = 0;
     pid->prev_error = 0;
+    total_Gz = 0;
 }
 
 float PID_compute(PIDController *pid, float input) {
@@ -125,21 +141,34 @@ void apply_speed()
 	}
 	// else
 	// PID control
-	MPU6050_Read_All(&hi2c1, &MPU6050);
 	current_Gz = MPU6050.Gz - Gz_mean;
-	control_signal = PID_compute(&pid_m, current_Gz)/2;
+	total_Gz += current_Gz * (LOOP_DELAY / 1000.0f);
+	control_signal = PID_compute(&pid_m, total_Gz);
 
 	// core speed is a number in the range MOTOR_SLOW (>0) - MOTOR_MAX (<=100)
 	int core_speed =  (MOTOR_SLOW_1 - MOTOR_MAX_1) / 100.0f * abs(current_speed);
 	if (current_speed > 0) // forward
 	{
-		TIM1->CCR1 = MOTOR_SLOW_1 - core_speed + (int)control_signal;
-		TIM2->CCR3 = MOTOR_SLOW_2 + core_speed - (int)control_signal;
-	}
-	else // backward
-	{
-		TIM1->CCR1 = MOTOR_SLOW_2 + core_speed - (int)control_signal;
-		TIM2->CCR3 = MOTOR_SLOW_1 - core_speed + (int)control_signal;
+		int speedR = MOTOR_MAX_1 - (int)control_signal;
+		if (speedR > MOTOR_SLOW_2)
+		{
+			speedR = MOTOR_SLOW_2;
+		}
+		else if (speedR < MOTOR_MAX_1)
+		{
+			speedR = MOTOR_MAX_1;
+		}
+		int speedL = MOTOR_MAX_2 - (int)control_signal;
+		if (speedL < MOTOR_SLOW_1)
+		{
+			speedL = MOTOR_SLOW_1;
+		}
+		else if (speedL > MOTOR_MAX_2)
+		{
+			speedL = MOTOR_MAX_2;
+		}
+		TIM1->CCR1 = speedR;
+		TIM2->CCR3 = speedL;
 	}
 }
 
@@ -150,7 +179,7 @@ void speed_ctl()
 	{
 		// renew PID controller, no I or D term should come from the previous movement
 		// params = Kp, Ki, Kd, setpoint = 0
-		PID_init(&pid_m, 1.5, 1, 0, 0);
+		PID_init(&pid_m, kp, ki, kd, 0);
 	}
 	if (current_speed != speed)
 	{
@@ -173,39 +202,45 @@ void speed_ctl()
 
 void rotate(float angle)
 {
-	/*if (angle > 0)
-		angle -= 7;
+	if (angle > 0)
+		angle -= R_offset_error;
 	else
-		angle += 7;*/
-	double total_Gz = 0;
-
-	int delay = 5;
+		angle += R_offset_error;
 	// freeze the robot slowly
 	speed = 0;
 	while(current_speed != 0)
 		speed_ctl();
 
-	PID_init(&pid_r, 10, 0, 0, angle);
-	while (abs(abs(total_Gz) - abs(angle)) > 0.1)
+	total_Gz = 0;
+	PID_init(&pid_r, kp2, ki2, kd2, angle);
+
+	if (angle > 0) // cw
 	{
-		control_signal = PID_compute(&pid_r, total_Gz);
-		if (control_signal > 0) // cw
-		{
-			TIM1->CCR1 = MOTOR_SLOW_1 - control_signal;
-			TIM2->CCR3 = MOTOR_SLOW_1 - control_signal;
-		}
-		else // ccw
-		{
-			TIM1->CCR1 = MOTOR_SLOW_2 + control_signal;;
-			TIM2->CCR3 = MOTOR_SLOW_2 + control_signal;;
-		}
-		HAL_Delay(delay);
-		MPU6050_Read_All(&hi2c1, &MPU6050);
-		current_Gz = (MPU6050.Gz - Gz_mean) * 1.18;
-		total_Gz += current_Gz / 1000.0f * delay;
+		TIM1->CCR1 = MOTOR_MAX_1;
+		TIM2->CCR3 = MOTOR_MAX_1;
 	}
+	else // ccw
+	{
+		TIM1->CCR1 = MOTOR_MAX_2;
+		TIM2->CCR3 = MOTOR_MAX_2;
+	}
+	int fixStop = 150;
+	float conp = fixStop / Rdelay;
+	HAL_Delay(fixStop);
+	int uuu = 0;
+	float rot = 0.0f;
+	do
+	{
+		HAL_Delay(Rdelay);
+		MPU6050_Read_All(&hi2c1, &MPU6050);
+		current_Gz = (MPU6050.Gz - Gz_mean) * (1+GzMul);
+		total_Gz += fabs(current_Gz * (Rdelay / 1000.0f));
+		uuu++;
+		rot = (total_Gz/uuu)*(uuu+conp);
+	} while (fabs(rot) < fabs(angle));
 
 	TIM1->CCR1 = 0;
+	TIM2->CCR3 = 0;
 	TIM2->CCR3 = 0;
 }
 /* USER CODE END 0 */
@@ -244,16 +279,21 @@ int main(void)
   MX_I2C1_Init();
   /* USER CODE BEGIN 2 */
 
-  HAL_Delay(1000);
+  HAL_GPIO_WritePin (GPIOC, GPIO_PIN_13, GPIO_PIN_SET);
+  HAL_Delay(10000);
+
   while (MPU6050_Init(&hi2c1) == 1); //Initialise the MPU6050
   // calibrate MPU6050
-  for(uint8_t interations = 0; interations < CALIB; interations++)
+  for(int interations = 0; interations < CALIB; interations++)
   {
 	  MPU6050_Read_All(&hi2c1, &MPU6050);
 	  Gz_mean += MPU6050.Gz;
+	  Ax_mean += MPU6050.Ax;
 	  Ay_mean += MPU6050.Ay;
+	  HAL_Delay(10);
   }
   Gz_mean /= CALIB;
+  Ax_mean /= CALIB;
   Ay_mean /= CALIB;
 
   HAL_TIM_PWM_Init(&htim1);
@@ -264,6 +304,7 @@ int main(void)
   TIM2->CR1 = 0x01;
   HAL_UART_Receive_IT(&huart1, UART1_rxBuffer, sizeof(UART1_rxBuffer));
 
+  HAL_GPIO_WritePin (GPIOC, GPIO_PIN_13, GPIO_PIN_RESET);
   /* USER CODE END 2 */
 
   /* Infinite loop */
@@ -308,6 +349,34 @@ int main(void)
 			  }
 		  }
 	  }
+	  // TODO: remove later / for debugging
+	  if (command == 'P')
+	  {
+		  token = strtok_r(NULL, delimiter, &saveptr);
+		  kp = atof(token);
+		  token = strtok_r(NULL, delimiter, &saveptr);
+		  ki = atof(token);
+		  token = strtok_r(NULL, delimiter, &saveptr);
+		  kd = atof(token);
+		  PID_init(&pid_m, kp, ki, kd, 0);
+		  command = COMMAND_NC;
+	  }
+	  if (command == 'X')
+	  {
+		  token = strtok_r(NULL, delimiter, &saveptr);
+		  kp2 = atof(token);
+		  token = strtok_r(NULL, delimiter, &saveptr);
+		  ki2 = atof(token);
+		  token = strtok_r(NULL, delimiter, &saveptr);
+		  kd2 = atof(token);
+		  token = strtok_r(NULL, delimiter, &saveptr);
+		  GzMul = atof(token);
+		  token = strtok_r(NULL, delimiter, &saveptr);
+		  R_offset_error = atof(token);
+		  token = strtok_r(NULL, delimiter, &saveptr);
+		  Rdelay = atoi(token);
+		  command = COMMAND_NC;
+	  }
 	  USART_recive = 0;
 	  HAL_UART_Transmit(&huart1, (uint8_t *)("OK!"), sizeof("OK!"), 100);
 	}
@@ -344,10 +413,10 @@ int main(void)
 	//robot speed
 	MPU6050_Read_All(&hi2c1, &MPU6050);
 	speed_ctl();
-	HAL_Delay(100);
+	HAL_Delay(LOOP_DELAY);
 	if (command == COMMAND_MOVE && Arg2 > 0)
 	{
-		Arg2 -= 100;
+		Arg2 -= LOOP_DELAY;
 		if (Arg2 <= 0)
 		{
 			speed = 0;
