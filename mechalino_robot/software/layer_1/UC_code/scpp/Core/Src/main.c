@@ -45,13 +45,13 @@ typedef struct {
 
 /* Private define ------------------------------------------------------------*/
 /* USER CODE BEGIN PD */
-#define CALIB 1000
+#define CALIB 50
 #define LOOP_DELAY 10
 #define ACCELERATION 5 // must be a divisor of 100! No check is being done!
-#define MOTOR_MAX_1 1400 //800
+#define MOTOR_MAX_1 800 //800
 #define MOTOR_SLOW_1 2800
 #define MOTOR_STOP 3000
-#define MOTOR_MAX_2 4500 //5100
+#define MOTOR_MAX_2 5100 //5100
 #define MOTOR_SLOW_2 3100
 #define COMMAND_NC 'N' // no command
 #define COMMAND_MOVE 'M' // set movement speed (& direction)
@@ -91,6 +91,7 @@ float total_Gz = 0;
 float control_signal;
 float total_x = 0;
 
+uint16_t mR, mL;
 int8_t speed = 0;
 int8_t current_speed = 0;
 
@@ -185,36 +186,57 @@ void speed_ctl()
 
 void rotate(float angle)
 {
+
+	for(int interations = 0; interations < CALIB; interations++)
+	{
+	  MPU6050_Read_All(&hi2c1, &MPU6050);
+	  Gz_mean += MPU6050.Gz;
+	  HAL_Delay(50);
+	}
+	Gz_mean /= CALIB;
+
 	if (angle > 0)
 		angle -= R_offset_error;
 	else
 		angle += R_offset_error;
 
-	total_Gz = 0;
-	PID_init(&pid_r, kp2, ki2, kd2, angle);
 
-	if (angle > 0) // cw
+	while(abs(angle)>0.1)
 	{
-		TIM1->CCR1 = MOTOR_MAX_1;
-		TIM2->CCR3 = MOTOR_MAX_1;
+		total_Gz = 0;
+		if (angle > 0)
+		{
+			mR = MOTOR_SLOW_1-150;
+			mL = MOTOR_SLOW_1+50;
+		}
+		else
+		{
+			mR = MOTOR_SLOW_2+150;
+			mL = MOTOR_SLOW_2-50;
+		}
+		while (fabs(total_Gz) - fabs(angle) < 0)
+		{
+			TIM1->CCR1 = mR;
+			TIM2->CCR3 = mL;
+			if (angle>0)
+			{
+				mR-=5;
+				mL-=5;
+			}
+			else
+			{
+				mR+=5;
+				mL+=5;
+			}
+			HAL_Delay(Rdelay);
+			MPU6050_Read_All(&hi2c1, &MPU6050);
+			current_Gz = (MPU6050.Gz - Gz_mean);
+			total_Gz += current_Gz * (Rdelay / 1000.0f);
+		}
+		TIM1->CCR1 = 0;
+		TIM2->CCR3 = 0;
+		angle = angle - total_Gz;
 	}
-	else // ccw
-	{
-		TIM1->CCR1 = MOTOR_MAX_2;
-		TIM2->CCR3 = MOTOR_MAX_2;
-	}
-	int fixStop = 150;
-	HAL_Delay(fixStop);
-	while (fabs(total_Gz) < fabs(angle))
-	{
-		HAL_Delay(Rdelay);
-		MPU6050_Read_All(&hi2c1, &MPU6050);
-		current_Gz = (MPU6050.Gz - Gz_mean) * (1+GzMul);
-		total_Gz += fabs(current_Gz * (Rdelay / 1000.0f));
-	}
-
-	TIM1->CCR1 = 0;
-	TIM2->CCR3 = 0;
 }
 /* USER CODE END 0 */
 
@@ -263,7 +285,7 @@ int main(void)
 	  Gz_mean += MPU6050.Gz;
 	  Ax_mean += MPU6050.Ax;
 	  Ay_mean += MPU6050.Ay;
-	  HAL_Delay(10);
+	  HAL_Delay(50);
   }
   Gz_mean /= CALIB;
   Ax_mean /= CALIB;
