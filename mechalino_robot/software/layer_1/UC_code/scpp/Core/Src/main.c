@@ -47,7 +47,7 @@ typedef struct {
 /* USER CODE BEGIN PD */
 #define CALIB 50
 #define LOOP_DELAY 10
-#define ACCELERATION 5 // must be a divisor of 100! No check is being done!
+#define ACCELERATION 10 // must be a divisor of 100! No check is being done!
 #define MOTOR_MAX_1 800 //800
 #define MOTOR_SLOW_1 2800
 #define MOTOR_STOP 3000
@@ -75,10 +75,10 @@ double Ax_mean = 0;
 double Ay_mean = 0;
 PIDController pid_m;
 PIDController pid_r;
-float kp = 1700.0f;
+float kp = 10.0f;
 float ki = 0.0f;
 float kd = 0.0f;
-float kp2 = 1.0f;
+float kp2 = 10.0f;
 float ki2 = 0.1f;
 float kd2 = 0.0f;
 float GzMul = 0.0f;
@@ -93,6 +93,7 @@ float total_x = 0;
 
 uint16_t mR, mL;
 int8_t speed = 0;
+int16_t movementTime = 0;
 int8_t current_speed = 0;
 
 char rx_buffer[30];
@@ -106,12 +107,27 @@ int Arg1, Arg2;
 /* Private function prototypes -----------------------------------------------*/
 void SystemClock_Config(void);
 /* USER CODE BEGIN PFP */
-void speed_ctl(); // gradually sets current speed to the desired one
+void motor(int16_t MotL, int16_t MotR);
+void PID_init(PIDController *pid, float kp, float ki, float kd, float setpoint);
+float PID_compute(PIDController *pid, float input);
+void move(); // gradually sets current speed to the desired one
 void apply_speed(); // applies the desired speed from -100 to 100 to robots.
+void rotate(float angle);
 /* USER CODE END PFP */
 
 /* Private user code ---------------------------------------------------------*/
 /* USER CODE BEGIN 0 */
+void motor(int16_t MotL, int16_t MotR)
+{
+	uint32_t cntL,cntR;
+	MotL = MotL + 100;//put an offset (0 to 200)
+	MotR = MotR + 100;//put an offset (0 to 200)
+	cntL = ((MotL*2000)/200) + 2000;//value of PWM start at 2000 and finish at 4000
+	cntR = ((MotR*2000)/200) + 2000;//value of PWM start at 2000 and finish at 4000
+	TIM2->CCR3 = cntL;//put value on TIMERs registers
+	TIM1->CCR1 = cntR;//put value on TIMERs registers
+}
+
 void PID_init(PIDController *pid, float kp, float ki, float kd, float setpoint) {
     pid->kp = kp;
     pid->ki = ki;
@@ -142,46 +158,76 @@ void apply_speed()
 	}
 	else
 	{
-		int speedR = MOTOR_MAX_1 - (int)control_signal;
-		if (speedR > MOTOR_SLOW_2)
-		{
-			speedR = MOTOR_SLOW_2;
-		}
-		else if (speedR < MOTOR_MAX_1)
-		{
-			speedR = MOTOR_MAX_1;
-		}
-		int speedL = MOTOR_MAX_2 - (int)control_signal;
-		if (speedL < MOTOR_SLOW_1)
-		{
-			speedL = MOTOR_SLOW_1;
-		}
-		else if (speedL > MOTOR_MAX_2)
-		{
-			speedL = MOTOR_MAX_2;
-		}
 		// PID control
+		MPU6050_Read_All(&hi2c1, &MPU6050);
 		current_Gz = MPU6050.Gz - Gz_mean;
 		total_Gz += current_Gz * (LOOP_DELAY / 1000.0f);
-		control_signal = PID_compute(&pid_m, total_Gz);
-
-		if (current_speed > 0) // forward
+		float control_signal = kp * total_Gz;
+		if (current_speed>0) // forward
 		{
-			TIM1->CCR1 = speedR;
-			TIM2->CCR3 = speedL;
+			if (control_signal < 0) // turned right, must turn left
+			{
+				motor(current_speed+10+(int8_t)control_signal, -current_speed);
+			}
+			else if (control_signal > 0)
+			{
+				motor(current_speed+10, -current_speed+(int8_t)control_signal);
+			}
 		}
 		else
 		{
-			TIM2->CCR3 = speedR;
-			TIM1->CCR1 = speedL;
+			if (control_signal < 0) // turned right, must turn left
+			{
+				motor(-current_speed-10, current_speed+(int8_t)control_signal);
+			}
+			else if (control_signal > 0)
+			{
+				motor(-current_speed-10+(int8_t)control_signal, current_speed);
+			}
 		}
 	}
 }
 
-void speed_ctl()
+void move()
 {
-	current_speed = speed;
+	current_speed = 0;
+	motor(0,0);
+
 	PID_init(&pid_m, kp, ki, kd, 0);
+	int breakTime = (int)(fabs(speed / ACCELERATION))*LOOP_DELAY;
+	movementTime = movementTime - breakTime;
+
+	while(movementTime>0)
+	{
+		if (current_speed < speed)
+		{
+			current_speed += ACCELERATION;
+		}
+		else if (current_speed > speed)
+		{
+			current_speed -= ACCELERATION;
+		}
+		apply_speed();
+		HAL_Delay(LOOP_DELAY);
+		movementTime -= LOOP_DELAY;
+	}
+	while(current_speed>0)
+	{
+		current_speed -= ACCELERATION;
+		apply_speed();
+		HAL_Delay(LOOP_DELAY);
+	}
+	if (total_Gz < 0) // turned right, must turn left
+	{
+		motor(-30, -30);
+	}
+	else if (total_Gz > 0)
+	{
+		motor(30,30);
+	}
+	HAL_Delay((int)(kp2));
+	motor(0,0);
+
 }
 
 void rotate(float angle)
@@ -385,7 +431,7 @@ int main(void)
 	case COMMAND_HALT:
 		// stop both movement and rotation
 		speed = 0;
-		speed_ctl();
+		move();
 		apply_speed();
 		command = COMMAND_NC; // command done
 		HAL_UART_Transmit(&huart1, (uint8_t *)("DONE"), sizeof("DONE"), 100);
@@ -393,18 +439,8 @@ int main(void)
 	case COMMAND_MOVE:
 		// set speed
 		speed = Arg1;
-		speed_ctl();
-		apply_speed();
-		while(Arg2 > 0)
-		{
-			Arg2 -= LOOP_DELAY;
-			HAL_Delay(LOOP_DELAY);
-			MPU6050_Read_All(&hi2c1, &MPU6050);
-			apply_speed();
-		}
-		speed = 0;
-		speed_ctl();
-		apply_speed();
+		movementTime = Arg2;
+		move();
 		command = COMMAND_NC; // command done
 		HAL_UART_Transmit(&huart1, (uint8_t *)("DONE"), sizeof("DONE"), 100);
 		break;
