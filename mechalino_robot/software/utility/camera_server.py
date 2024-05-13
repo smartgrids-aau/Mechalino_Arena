@@ -58,7 +58,7 @@ if __name__ == "__main__":
     camera_thread.start()
     
     # Change these values according to your server configuration
-    host = "192.168.111.2"
+    host = "192.168.111.1"
     port = 9999
     
     serve_images(host, port)
