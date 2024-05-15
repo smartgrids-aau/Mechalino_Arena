@@ -6,7 +6,7 @@
 ../Core/Src/main.c:165:6:apply_speed	24	static
 ../Core/Src/main.c:205:6:move	24	static
 ../Core/Src/main.c:248:6:rotate	32	static
-../Core/Src/main.c:302:5:main	24	static
-../Core/Src/main.c:380:6:SystemClock_Config	88	static
-../Core/Src/main.c:423:6:HAL_UART_RxCpltCallback	16	static
-../Core/Src/main.c:445:6:Error_Handler	4	static,ignoring_inline_asm
+../Core/Src/main.c:302:5:main	16	static
+../Core/Src/main.c:387:6:SystemClock_Config	88	static
+../Core/Src/main.c:430:6:HAL_UART_RxCpltCallback	16	static
+../Core/Src/main.c:452:6:Error_Handler	4	static,ignoring_inline_asm

@@ -356,9 +356,16 @@ int main(void)
   /* Infinite loop */
   /* USER CODE BEGIN WHILE */
 
-  disable_multiplexers();
+//  disable_multiplexers();
+//  HAL_Delay(5000);
+
   while (1)
   {
+//	  HAL_GPIO_WritePin(MUX_A_GPIO, MUX_A_PIN, GPIO_PIN_RESET);  // A
+//	  HAL_GPIO_WritePin(MUX_B_GPIO, MUX_B_PIN, GPIO_PIN_RESET);  // B
+//	  HAL_GPIO_WritePin(MUX_C_GPIO, MUX_C_PIN, GPIO_PIN_RESET);  // C
+//	  enable_multiplexers();
+//	  HAL_Delay(100);
 	  for (uint8_t i = 0; i < NUM_SENSORS; i++){
 		  IR_sensor_readings[i] = read_IR_sensors(i);
 		  HAL_Delay(100);
