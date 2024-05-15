@@ -33,14 +33,7 @@
 
 /* Private typedef -----------------------------------------------------------*/
 /* USER CODE BEGIN PTD */
-typedef struct {
-	float kp;          // Proportional gain
-	float ki;          // Integral gain
-	float kd;          // Derivative gain
-    float setpoint;    // Target value
-    float integral;    // Integral sum
-    float prev_error;  // Previous error
-} PIDController;
+
 /* USER CODE END PTD */
 
 /* Private define ------------------------------------------------------------*/
@@ -59,6 +52,22 @@ typedef struct {
 #define COMMAND_HALT 'H' // stops robot (both movement and rotation)
 #define COMMAND_LOCATION 'L' //give robot its own location
 #define COMMAND_GOAL 'G' //give robot a goal to go (no planning needed)
+
+#define NUM_SENSORS 8 // 8 IR LED and receiver pairs
+
+/* Define GPIO pins for multiplexer control */
+#define MUX_A_GPIO GPIOB
+#define MUX_A_PIN GPIO_PIN_3
+#define MUX_B_GPIO GPIOB
+#define MUX_B_PIN GPIO_PIN_4
+#define MUX_C_GPIO GPIOB
+#define MUX_C_PIN GPIO_PIN_5
+#define MUX_RC_EN_GPIO GPIOB
+#define MUX_RC_EN_PIN GPIO_PIN_0
+#define MUX_EN_GPIO GPIOB
+#define MUX_EN_PIN GPIO_PIN_1
+#define IR_PHOTO_READ_GPIO GPIOA
+#define IR_PHOTO_READ_PIN GPIO_PIN_0
 /* USER CODE END PD */
 
 /* Private macro -------------------------------------------------------------*/
@@ -69,23 +78,17 @@ typedef struct {
 /* Private variables ---------------------------------------------------------*/
 
 /* USER CODE BEGIN PV */
+uint8_t IR_sensor_readings[NUM_SENSORS];
 MPU6050_t MPU6050;
 double Gz_mean = 0;
-double Ax_mean = 0;
-double Ay_mean = 0;
-PIDController pid_m;
-PIDController pid_r;
-float kp = 10.0f;
-float ki = 0.0f;
-float kd = 0.0f;
-float kp2 = 10.0f;
-float ki2 = 0.1f;
-float kd2 = 0.0f;
-float GzMul = 0.0f;
-int Gzs[1000];
-int Gzs_index = 0;
-int Rdelay = 5;
-float R_offset_error = 0.0f;
+float kp = 50.0f;
+int correction_speed = 30;
+int correction_time = 160;
+
+int Rdelay = 10;
+float r_cw = -69;
+float r_ccw = 76.5;
+
 float current_Gz;
 float total_Gz = 0;
 float control_signal;
@@ -107,9 +110,11 @@ int Arg1, Arg2;
 /* Private function prototypes -----------------------------------------------*/
 void SystemClock_Config(void);
 /* USER CODE BEGIN PFP */
+void select_mux_channel(uint8_t channel);
+uint8_t read_IR_sensors(uint8_t channel);
+void enable_multiplexers(void);
+void disable_multiplexers(void);
 void motor(int16_t MotL, int16_t MotR);
-void PID_init(PIDController *pid, float kp, float ki, float kd, float setpoint);
-float PID_compute(PIDController *pid, float input);
 void move(); // gradually sets current speed to the desired one
 void apply_speed(); // applies the desired speed from -100 to 100 to robots.
 void rotate(float angle);
@@ -117,6 +122,35 @@ void rotate(float angle);
 
 /* Private user code ---------------------------------------------------------*/
 /* USER CODE BEGIN 0 */
+void select_mux_channel(uint8_t channel) {
+    // Set A, B, C inputs of the multiplexers
+    HAL_GPIO_WritePin(MUX_A_GPIO, MUX_A_PIN, (channel & 0x01) ? GPIO_PIN_RESET : GPIO_PIN_SET);  // A
+    HAL_GPIO_WritePin(MUX_B_GPIO, MUX_B_PIN, (channel & 0x02) ? GPIO_PIN_RESET : GPIO_PIN_SET);  // B
+    HAL_GPIO_WritePin(MUX_C_GPIO, MUX_C_PIN, (channel & 0x04) ? GPIO_PIN_RESET : GPIO_PIN_SET);  // C
+}
+
+void enable_multiplexers(void) {
+    HAL_GPIO_WritePin(MUX_RC_EN_GPIO, MUX_RC_EN_PIN, GPIO_PIN_RESET); // Enable CD74HC237E (assuming active high)
+    HAL_GPIO_WritePin(MUX_EN_GPIO, MUX_EN_PIN, GPIO_PIN_RESET); // Enable SN74HC138N (assuming active high)
+}
+
+void disable_multiplexers(void) {
+    HAL_GPIO_WritePin(MUX_RC_EN_GPIO, MUX_RC_EN_PIN, GPIO_PIN_SET);
+    HAL_GPIO_WritePin(MUX_EN_GPIO, MUX_EN_PIN, GPIO_PIN_SET);
+}
+
+uint8_t read_IR_sensors(uint8_t channel) {
+	select_mux_channel(channel); // Select each IR sender and receiver
+	HAL_Delay(100); // Allow time for the IR signal to be sent and received
+    enable_multiplexers();  // Ensure the multiplexers are enabled before testing
+	HAL_Delay(100); // Allow time for the IR signal to be sent and received
+	uint8_t received = HAL_GPIO_ReadPin(IR_PHOTO_READ_GPIO, IR_PHOTO_READ_PIN);
+	HAL_Delay(100); // Wait some time before testing next IR pair
+    disable_multiplexers();  // Disable multiplexers after testing to save power and avoid interference
+	HAL_Delay(100); // Allow time for the IR signal to be sent and received
+	return received;
+}
+
 void motor(int16_t MotL, int16_t MotR)
 {
 	uint32_t cntL,cntR;
@@ -126,25 +160,6 @@ void motor(int16_t MotL, int16_t MotR)
 	cntR = ((MotR*2000)/200) + 2000;//value of PWM start at 2000 and finish at 4000
 	TIM2->CCR3 = cntL;//put value on TIMERs registers
 	TIM1->CCR1 = cntR;//put value on TIMERs registers
-}
-
-void PID_init(PIDController *pid, float kp, float ki, float kd, float setpoint) {
-    pid->kp = kp;
-    pid->ki = ki;
-    pid->kd = kd;
-    pid->setpoint = setpoint;
-    pid->integral = 0;
-    pid->prev_error = 0;
-    total_Gz = 0;
-}
-
-float PID_compute(PIDController *pid, float input) {
-	float error = pid->setpoint - input;
-    pid->integral += error;
-    float derivative = error - pid->prev_error;
-    float output = pid->kp * error + pid->ki * pid->integral + pid->kd * derivative;
-    pid->prev_error = error;
-    return output;
 }
 
 void apply_speed()
@@ -158,7 +173,6 @@ void apply_speed()
 	}
 	else
 	{
-		// PID control
 		MPU6050_Read_All(&hi2c1, &MPU6050);
 		current_Gz = MPU6050.Gz - Gz_mean;
 		total_Gz += current_Gz * (LOOP_DELAY / 1000.0f);
@@ -190,10 +204,11 @@ void apply_speed()
 
 void move()
 {
+	total_Gz = 0;
+
 	current_speed = 0;
 	motor(0,0);
 
-	PID_init(&pid_m, kp, ki, kd, 0);
 	int breakTime = (int)(fabs(speed / ACCELERATION))*LOOP_DELAY;
 	movementTime = movementTime - breakTime;
 
@@ -219,13 +234,13 @@ void move()
 	}
 	if (total_Gz < 0) // turned right, must turn left
 	{
-		motor(-30, -30);
+		motor(-correction_speed, -correction_speed);
 	}
 	else if (total_Gz > 0)
 	{
-		motor(30,30);
+		motor(correction_speed,correction_speed);
 	}
-	HAL_Delay((int)(kp2));
+	HAL_Delay(correction_time);
 	motor(0,0);
 
 }
@@ -240,12 +255,6 @@ void rotate(float angle)
 	  HAL_Delay(50);
 	}
 	Gz_mean /= CALIB;
-
-	if (angle > 0)
-		angle -= R_offset_error;
-	else
-		angle += R_offset_error;
-
 
 	while(abs(angle)>0.1)
 	{
@@ -321,7 +330,7 @@ int main(void)
   /* USER CODE BEGIN 2 */
 
   HAL_GPIO_WritePin (GPIOC, GPIO_PIN_13, GPIO_PIN_SET);
-  HAL_Delay(10000);
+  HAL_Delay(5000);
 
   while (MPU6050_Init(&hi2c1) == 1); //Initialise the MPU6050
   // calibrate MPU6050
@@ -329,13 +338,9 @@ int main(void)
   {
 	  MPU6050_Read_All(&hi2c1, &MPU6050);
 	  Gz_mean += MPU6050.Gz;
-	  Ax_mean += MPU6050.Ax;
-	  Ay_mean += MPU6050.Ay;
 	  HAL_Delay(50);
   }
   Gz_mean /= CALIB;
-  Ax_mean /= CALIB;
-  Ay_mean /= CALIB;
 
   HAL_TIM_PWM_Init(&htim1);
   HAL_TIM_PWM_Init(&htim2);
@@ -350,114 +355,21 @@ int main(void)
 
   /* Infinite loop */
   /* USER CODE BEGIN WHILE */
+
+  disable_multiplexers();
   while (1)
   {
-	// check if there is any new command
-	if (USART_recive == 1)
-	{
-	  char *delimiter = " ";
-	  char *saveptr;
-	  char *token;
-	  token = strtok_r(rx_buffer, delimiter, &saveptr);
-	  if (token != NULL) {
-		  command = token[0];
+	  for (uint8_t i = 0; i < NUM_SENSORS; i++){
+		  IR_sensor_readings[i] = read_IR_sensors(i);
+		  HAL_Delay(100);
 	  }
-	  else
-	  {
-		  command = COMMAND_NC; // failed to read the command, so drop it
-	  }
-	  // commands with 1 or 2 arguments
-	  if (command == COMMAND_MOVE || command == COMMAND_ROTATE)
-	  {
-		  token = strtok_r(NULL, delimiter, &saveptr);
-		  if (token != NULL) {
-			  Arg1 = atoi(token);
-		  }
-		  else
-		  {
-			  command = COMMAND_NC; // failed to read arguments, so drop the command
-		  }
-		  // commands with a second argument
-		  if (command == COMMAND_MOVE)
-		  {
-			  token = strtok_r(NULL, delimiter, &saveptr);
-			  if (token != NULL) {
-				  Arg2 = atoi(token);
-			  }
-			  else
-			  {
-				  command = COMMAND_NC; // failed to read arguments, so drop the command
-			  }
-		  }
-	  }
-	  // TODO: remove later / for debugging
-	  if (command == 'P')
-	  {
-		  token = strtok_r(NULL, delimiter, &saveptr);
-		  kp = atof(token);
-		  token = strtok_r(NULL, delimiter, &saveptr);
-		  ki = atof(token);
-		  token = strtok_r(NULL, delimiter, &saveptr);
-		  kd = atof(token);
-		  PID_init(&pid_m, kp, ki, kd, 0);
-		  command = COMMAND_NC;
-	  }
-	  if (command == 'X')
-	  {
-		  token = strtok_r(NULL, delimiter, &saveptr);
-		  kp2 = atof(token);
-		  token = strtok_r(NULL, delimiter, &saveptr);
-		  ki2 = atof(token);
-		  token = strtok_r(NULL, delimiter, &saveptr);
-		  kd2 = atof(token);
-		  token = strtok_r(NULL, delimiter, &saveptr);
-		  GzMul = atof(token);
-		  token = strtok_r(NULL, delimiter, &saveptr);
-		  R_offset_error = atof(token);
-		  token = strtok_r(NULL, delimiter, &saveptr);
-		  Rdelay = atoi(token);
-		  command = COMMAND_NC;
-	  }
-	  USART_recive = 0;
-	  if (command == COMMAND_NC)
-		  HAL_UART_Transmit(&huart1, (uint8_t *)("DONE"), sizeof("DONE"), 100);
-	}
-	// handle current command
-	switch(command)
-	{
-	case COMMAND_NC:
-		// nothing to do
-		break;
-	case COMMAND_HALT:
-		// stop both movement and rotation
-		speed = 0;
-		move();
-		apply_speed();
-		command = COMMAND_NC; // command done
-		HAL_UART_Transmit(&huart1, (uint8_t *)("DONE"), sizeof("DONE"), 100);
-		break;
-	case COMMAND_MOVE:
-		// set speed
-		speed = Arg1;
-		movementTime = Arg2;
-		move();
-		command = COMMAND_NC; // command done
-		HAL_UART_Transmit(&huart1, (uint8_t *)("DONE"), sizeof("DONE"), 100);
-		break;
-	case COMMAND_ROTATE:
-		rotate(Arg1);
-		command = COMMAND_NC; // command done
-		HAL_UART_Transmit(&huart1, (uint8_t *)("DONE"), sizeof("DONE"), 100);
-		break;
-	default:
-		// TODO: implementation of other commands
-		break;
-	}
 
     /* USER CODE END WHILE */
 
     /* USER CODE BEGIN 3 */
+
   }
+
   /* USER CODE END 3 */
 }
 
