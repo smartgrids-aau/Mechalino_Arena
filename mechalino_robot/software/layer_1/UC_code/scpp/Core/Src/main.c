@@ -124,19 +124,19 @@ void rotate(float angle);
 /* USER CODE BEGIN 0 */
 void select_mux_channel(uint8_t channel) {
     // Set A, B, C inputs of the multiplexers
-    HAL_GPIO_WritePin(MUX_A_GPIO, MUX_A_PIN, (channel & 0x01) ? GPIO_PIN_RESET : GPIO_PIN_SET);  // A
-    HAL_GPIO_WritePin(MUX_B_GPIO, MUX_B_PIN, (channel & 0x02) ? GPIO_PIN_RESET : GPIO_PIN_SET);  // B
-    HAL_GPIO_WritePin(MUX_C_GPIO, MUX_C_PIN, (channel & 0x04) ? GPIO_PIN_RESET : GPIO_PIN_SET);  // C
+    HAL_GPIO_WritePin(MUX_A_GPIO, MUX_A_PIN, (channel & 0x01) ? GPIO_PIN_SET : GPIO_PIN_RESET);  // A
+    HAL_GPIO_WritePin(MUX_B_GPIO, MUX_B_PIN, (channel & 0x02) ? GPIO_PIN_SET : GPIO_PIN_RESET);  // B
+    HAL_GPIO_WritePin(MUX_C_GPIO, MUX_C_PIN, (channel & 0x04) ? GPIO_PIN_SET : GPIO_PIN_RESET);  // C
 }
 
 void enable_multiplexers(void) {
-    HAL_GPIO_WritePin(MUX_RC_EN_GPIO, MUX_RC_EN_PIN, GPIO_PIN_RESET); // Enable CD74HC237E (assuming active high)
-    HAL_GPIO_WritePin(MUX_EN_GPIO, MUX_EN_PIN, GPIO_PIN_RESET); // Enable SN74HC138N (assuming active high)
+    HAL_GPIO_WritePin(MUX_RC_EN_GPIO, MUX_RC_EN_PIN, GPIO_PIN_SET); // Enable CD74HC237E (assuming active high)
+    HAL_GPIO_WritePin(MUX_EN_GPIO, MUX_EN_PIN, GPIO_PIN_SET); // Enable SN74HC138N (assuming active high)
 }
 
 void disable_multiplexers(void) {
-    HAL_GPIO_WritePin(MUX_RC_EN_GPIO, MUX_RC_EN_PIN, GPIO_PIN_SET);
-    HAL_GPIO_WritePin(MUX_EN_GPIO, MUX_EN_PIN, GPIO_PIN_SET);
+    HAL_GPIO_WritePin(MUX_RC_EN_GPIO, MUX_RC_EN_PIN, GPIO_PIN_RESET);
+    HAL_GPIO_WritePin(MUX_EN_GPIO, MUX_EN_PIN, GPIO_PIN_RESET);
 }
 
 uint8_t read_IR_sensors(uint8_t channel) {
@@ -332,7 +332,7 @@ int main(void)
   HAL_GPIO_WritePin (GPIOC, GPIO_PIN_13, GPIO_PIN_SET);
   HAL_Delay(5000);
 
-  while (MPU6050_Init(&hi2c1) == 1); //Initialise the MPU6050
+  while (MPU6050_Init(&hi2c1) == 1); // Initialise the MPU6050
   // calibrate MPU6050
   for(int interations = 0; interations < CALIB; interations++)
   {
