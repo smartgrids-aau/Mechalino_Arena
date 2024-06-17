@@ -1,14 +1,23 @@
+<!--
+This launch file configures and launches multiple nodes required for the Mechalino Arena application.
+It sets up the overhead camera image provider, RViz for visualization, and other essential nodes for the system.
+-->
 <launch>
+     <!-- Define an argument to specify where the output should be displayed (default is 'screen') -->
     <arg name="output" default="screen" />
-    <arg name="table_view" default="false" /> <!-- New argument for table view -->
+     <!-- New argument for table view, default is 'false' -->
+    <arg name="table_view" default="false" />
     
-    <!-- Define arguments for RViz config -->
+    <!-- Define arguments for RViz configuration files based on the value of 'table_view' -->
+    <!-- Use a specific RViz configuration if 'table_view' is true -->
     <arg if="$(arg table_view)" name="rviz_config" value="$(find mechalino_arena)/rviz/config_table_view.rviz" />
+    <!-- Use the default RViz configuration if 'table_view' is false -->
     <arg unless="$(arg table_view)" name="rviz_config" value="$(find mechalino_arena)/rviz/config.rviz" />
 
     <!-- overhead camera image provider node and viewing -->
 
     <node pkg="mechalino_arena" type="udpcam2topic.py" name="udpcam2topic" output="$(arg output)">
+        <!-- Load camera parameters from a YAML file -->
         <rosparam command="load" file="$(find mechalino_arena)/param/camera_params.yaml" />
     </node>
     
@@ -17,13 +26,19 @@
 
     <!-- +++++++++++++++++++++++++++++++++++++++++++++++ -->
 
+    <!-- Node to publish the table transform -->
     <node pkg="mechalino_arena" type="table_tf_publisher.py" name="table_tf_publisher" output="$(arg output)">
+        <!-- Load camera parameters from a YAML file -->
         <rosparam command="load" file="$(find mechalino_arena)/param/camera_params.yaml" />
+        <!-- Load ArUco markers parameters from a YAML file -->
         <rosparam command="load" file="$(find mechalino_arena)/param/aruco_markers_params.yaml" />
     </node>
 
+    <!-- Node to publish the robots' transforms -->
     <node pkg="mechalino_arena" type="robots_publisher.py" name="robots_publisher" output="$(arg output)">
+        <!-- Load camera parameters from a YAML file -->
         <rosparam command="load" file="$(find mechalino_arena)/param/camera_params.yaml" />
+        <!-- Load ArUco markers parameters from a YAML file -->
         <rosparam command="load" file="$(find mechalino_arena)/param/aruco_markers_params.yaml" />
     </node>
 
