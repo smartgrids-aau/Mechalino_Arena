@@ -1,22 +1,36 @@
 #!/usr/bin/env python3
-import numpy as np
-import rospy
-import cv2
-from sensor_msgs.msg import Image
-from cv_bridge import CvBridge
-import cv2.aruco as aruco
-import traceback
-import tf
-import tf.transformations as tf_transformations
-import tf.transformations as tf_trans
-from geometry_msgs.msg import TransformStamped
-import tf2_ros
-from geometry_msgs.msg import PoseStamped
-from std_msgs.msg import Float32MultiArray
 
+"""
+This program captures images from a ROS topic, detects ArUco markers on robots, calculates their poses,
+and publishes the transformations and poses to respective ROS topics. The main function handles the detection
+and processing of the ArUco markers and computes the transformations between the robots and the table.
+"""
+
+import numpy as np  # Library for numerical operations
+import rospy  # ROS Python client library
+import cv2  # OpenCV library for image processing
+from sensor_msgs.msg import Image  # ROS Image message type
+from cv_bridge import CvBridge  # For converting between ROS Image messages and OpenCV images
+import cv2.aruco as aruco  # ArUco marker detection
+import traceback  # Provides error traceback information
+import tf  # ROS transform library
+import tf.transformations as tf_transformations  # Provides transformation utilities
+import tf.transformations as tf_trans  # Alias for transformation utilities
+from geometry_msgs.msg import TransformStamped  # ROS TransformStamped message type
+import tf2_ros  # ROS transform broadcaster
+from geometry_msgs.msg import PoseStamped  # ROS PoseStamped message type
+from std_msgs.msg import Float32MultiArray  # ROS Float32MultiArray message type
+
+# Global variable to store the transformation between the table and the camera
 T_table_camera = None # global access
 
 def image_callback(msg):
+    """
+    Processes the incoming image to detect ArUco markers and calculate the poses of the robots.
+
+    Args:
+        msg (sensor_msgs.msg.Image): The incoming image message.
+    """
     global cv_bridge
     global aruco_marker_detector
     global mechalino_ids, number_of_specified_robots
@@ -24,29 +38,33 @@ def image_callback(msg):
     global broadcaster, pose_publishers
     global T_table_camera
 
+    # Convert the ROS Image message to an OpenCV image
     cv_image = cv_bridge.imgmsg_to_cv2(msg, desired_encoding="8UC3")
 
     try:
-        # Convert ROS Image message to OpenCV image using CvBridge
-        
+        # Convert the image to grayscale
         gray = cv2.cvtColor(cv_image, cv2.COLOR_BGR2GRAY)
 
+        # Detect ArUco markers in the image
         markerCorners, markerIds, _ = aruco_marker_detector.detectMarkers(gray)
 
         if markerIds is None:
             rospy.logwarn("No robot is being detected!")
             return
 
+        # Check if all specified Mechalino IDs are detected
         for id in mechalino_ids:
             if not (id in markerIds):
                 rospy.logwarn(f"Mechalino with id {id} is not detected!")
         
+        # Ensure that only specified Mechalino IDs are detected
         for i in range(len(markerIds)):
             if not (markerIds[i] in mechalino_ids):
                 rospy.logwarn(f"Invalid robot id detected: {markerIds[i]}")
                 return
             
         for i in range(len(markerIds)):
+            # Calculate the pose of the marker
             retval, rvec, tvec = cv2.solvePnP(objPoints, markerCorners[i],camera_matrix,distortion_coeffs)
 
             # Convert rotation vector to rotation matrix
@@ -104,13 +122,16 @@ if __name__ == '__main__':
                 break
             except Exception as e:
                 pass
+        # Get the transformation between the table and the camera
         (trans_table_camera, rot_table_camera) = tf_listener.lookupTransform('table', 'camera', rospy.Time(0))
         T_table_camera = tf_trans.concatenate_matrices(tf_trans.translation_matrix(trans_table_camera),
                                                             tf_trans.quaternion_matrix(rot_table_camera))
         rospy.loginfo("Table tf found! Publishing mechalino tfs ...")
 
+        # Initialize the CvBridge object
         cv_bridge = CvBridge()
 
+        # Retrieve parameters for ArUco marker detection and pose estimation
         robots_dictionary = int(rospy.get_param('~robots_dictionary'))
         detectorParams = aruco.DetectorParameters()
 
@@ -133,6 +154,7 @@ if __name__ == '__main__':
         detectorParams.cornerRefinementMaxIterations = 200 # 30
         detectorParams.cornerRefinementMinAccuracy = 0.05 # 0.1
 
+        # Initialize the ArUco marker detector
         dictionary = aruco.getPredefinedDictionary(robots_dictionary)
         aruco_marker_detector = aruco.ArucoDetector(dictionary, detectorParams)
         
@@ -149,13 +171,17 @@ if __name__ == '__main__':
         objPoints[1] = np.array([robots_marker_size/2.0, robots_marker_size/2.0, 0])
         objPoints[0] = np.array([-robots_marker_size/2.0, robots_marker_size/2.0, 0])
 
+        # Initialize the transform broadcaster
         broadcaster = tf2_ros.TransformBroadcaster()
 
+        # Initialize pose publishers for each robot
         pose_publishers = []
         for i in range(len(mechalino_ids)):
             pose_publishers.append(rospy.Publisher(f"pos/mechalino_{mechalino_ids[i]}", Float32MultiArray, queue_size=1))
 
+        # Subscribe to the camera image topic
         rospy.Subscriber("/camera/image", Image, image_callback)
+        # Spin to keep the script running
         rospy.spin()
     except rospy.ROSInterruptException:
         pass
