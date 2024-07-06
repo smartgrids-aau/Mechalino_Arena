@@ -58,18 +58,18 @@ AnnotateStartValue=1
 AnnotationIndexControlEnabled=0
 AnnotateSuffix=
 AnnotateScope=All
-AnnotateOrder=-1
+AnnotateOrder=1
 DoLibraryUpdate=1
 DoDatabaseUpdate=1
-ClassGenCCAutoEnabled=1
+ClassGenCCAutoEnabled=0
 ClassGenCCAutoRoomEnabled=0
 ClassGenNCAutoScope=None
 DItemRevisionGUID=
 GenerateClassCluster=0
-DocumentUniqueId=EJVJHQLE
+DocumentUniqueId=JKJUFHAD
 
 [Document2]
-DocumentPath=Mechalino_Second_Layer_v2.SchDoc
+DocumentPath=Mechalino_Second_Layer.PcbDoc
 AnnotationEnabled=1
 AnnotateStartValue=1
 AnnotationIndexControlEnabled=0
@@ -83,7 +83,11 @@ ClassGenCCAutoRoomEnabled=0
 ClassGenNCAutoScope=None
 DItemRevisionGUID=
 GenerateClassCluster=0
-DocumentUniqueId=JKJUFHAD
+DocumentUniqueId=HYJQFPAM
+
+[GeneratedDocument1]
+DocumentPath=Project Outputs for Mechalino_Second_Layer\Design Rule Check - Mechalino_Second_Layer.html
+DItemRevisionGUID=
 
 [Configuration1]
 Name=Sources
