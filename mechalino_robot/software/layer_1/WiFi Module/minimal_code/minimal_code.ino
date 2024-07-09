@@ -37,7 +37,7 @@ void handleRoot() {//recive 192.168.5.218/Robot1/?F=10&L=90
   server.send(200, "text/plain", "OK\r\n");
 }
 
-const char* ssid = "ExplorerBotHS", *password = "12345679";
+const char* ssid = "SPONGEBOB69", *password = "Test1410";
 const char* deviceName = "esp8266";
 
 void setup(void)
