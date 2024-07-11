@@ -2,115 +2,8 @@
 FileName = Mechalino_Second_Layer.GBR
 AutoAperture = True
 *************************************************************
-Generating : Bottom 3D Body
-      File : Mechalino_Second_Layer.GM23
-
-    Adding Layer      : Bottom 3D Body
-
-
-Used DCodes :
-    D39
-*************************************************************
-
-*************************************************************
-Generating : Bottom Courtyard
-      File : Mechalino_Second_Layer.GM21
-
-    Adding Layer      : Bottom Courtyard
-
-
-Used DCodes :
-    D39
-*************************************************************
-
-*************************************************************
-Generating : Top Component Center
-      File : Mechalino_Second_Layer.GM16
-
-    Adding Layer      : Top Component Center
-
-
-Used DCodes :
-    D39
-*************************************************************
-
-*************************************************************
-Generating : Top Courtyard
-      File : Mechalino_Second_Layer.GM15
-
-    Adding Layer      : Top Courtyard
-
-
-Used DCodes :
-    D13
-    D39
-    D41
-*************************************************************
-
-*************************************************************
-Generating : Top 3D Body
-      File : Mechalino_Second_Layer.GM13
-
-    Adding Layer      : Top 3D Body
-
-
-Used DCodes :
-    D10
-    D13
-    D39
-    D40
-*************************************************************
-
-*************************************************************
-Generating : Top Component Outline
-      File : Mechalino_Second_Layer.GM11
-
-    Adding Layer      : Top Component Outline
-
-
-Used DCodes :
-    D39
-    D40
-*************************************************************
-
-*************************************************************
-Generating : Top Assembly
-      File : Mechalino_Second_Layer.GM5
-
-    Adding Layer      : Top Assembly
-
-
-Used DCodes :
-    D13
-*************************************************************
-
-*************************************************************
-Generating : Top Designator
-      File : Mechalino_Second_Layer.GM3
-
-    Adding Layer      : Top Designator
-
-
-Used DCodes :
-    D10
-*************************************************************
-
-*************************************************************
-Generating : Mechanical 1
-      File : Mechalino_Second_Layer.GM1
-
-    Adding Layer      : Mechanical 1
-
-
-Used DCodes :
-    D10
-*************************************************************
-
-*************************************************************
-Generating : Bottom Paste
-      File : Mechalino_Second_Layer.GBP
-
-    Adding Layer      : Bottom Paste
+Generating : Bottom Pad Master
+      File : Mechalino_Second_Layer.GPB
 
     Adding Layer      : Bottom Layer
 
@@ -118,13 +11,19 @@ Generating : Bottom Paste
 
 
 Used DCodes :
+    D25
+    D34
+    D35
+    D36
+    D37
+    D38
+    D39
+    D40
 *************************************************************
 
 *************************************************************
-Generating : Top Paste
-      File : Mechalino_Second_Layer.GTP
-
-    Adding Layer      : Top Paste
+Generating : Top Pad Master
+      File : Mechalino_Second_Layer.GPT
 
     Adding Layer      : Top Layer
 
@@ -132,74 +31,20 @@ Generating : Top Paste
 
 
 Used DCodes :
-    D17
-    D18
-    D19
-    D20
-    D21
-    D22
-*************************************************************
-
-*************************************************************
-Generating : Bottom Solder
-      File : Mechalino_Second_Layer.GBS
-
-    Adding Layer      : Bottom Solder
-
-    Adding Layer      : Bottom Layer
-
-    Adding Layer      : Multi-Layer
-
-
-Used DCodes :
-    D23
-    D24
-    D25
-    D26
-    D27
-    D28
-    D29
-    D30
-*************************************************************
-
-*************************************************************
-Generating : Top Solder
-      File : Mechalino_Second_Layer.GTS
-
-    Adding Layer      : Top Solder
-
-    Adding Layer      : Top Layer
-
-    Adding Layer      : Multi-Layer
-
-
-Used DCodes :
-    D17
     D18
     D19
     D20
     D21
     D22
     D23
-    D24
     D25
-    D26
-    D27
-    D28
-    D29
-    D30
-*************************************************************
-
-*************************************************************
-Generating : Bottom Overlay
-      File : Mechalino_Second_Layer.GBO
-
-    Adding Layer      : Bottom Overlay
-
-
-Used DCodes :
-    D13
-    D15
+    D34
+    D35
+    D36
+    D37
+    D38
+    D39
+    D40
 *************************************************************
 
 *************************************************************
@@ -217,11 +62,26 @@ Used DCodes :
     D14
     D15
     D16
+    D17
 *************************************************************
 
 *************************************************************
-Generating : Top Pad Master
-      File : Mechalino_Second_Layer.GPT
+Generating : Bottom Overlay
+      File : Mechalino_Second_Layer.GBO
+
+    Adding Layer      : Bottom Overlay
+
+
+Used DCodes :
+    D13
+    D14
+*************************************************************
+
+*************************************************************
+Generating : Top Solder
+      File : Mechalino_Second_Layer.GTS
+
+    Adding Layer      : Top Solder
 
     Adding Layer      : Top Layer
 
@@ -229,24 +89,28 @@ Generating : Top Pad Master
 
 
 Used DCodes :
-    D17
     D18
     D19
     D20
     D21
     D22
+    D23
     D24
+    D25
+    D26
+    D27
+    D28
+    D29
+    D30
+    D31
     D32
-    D33
-    D34
-    D35
-    D36
-    D37
 *************************************************************
 
 *************************************************************
-Generating : Bottom Pad Master
-      File : Mechalino_Second_Layer.GPB
+Generating : Bottom Solder
+      File : Mechalino_Second_Layer.GBS
+
+    Adding Layer      : Bottom Solder
 
     Adding Layer      : Bottom Layer
 
@@ -255,12 +119,128 @@ Generating : Bottom Pad Master
 
 Used DCodes :
     D24
+    D25
+    D26
+    D27
+    D28
+    D29
+    D30
+    D31
     D32
-    D33
-    D34
-    D35
-    D36
-    D37
+*************************************************************
+
+*************************************************************
+Generating : Top Paste
+      File : Mechalino_Second_Layer.GTP
+
+    Adding Layer      : Top Paste
+
+    Adding Layer      : Top Layer
+
+    Adding Layer      : Multi-Layer
+
+
+Used DCodes :
+    D18
+    D19
+    D20
+    D21
+    D22
+    D23
+*************************************************************
+
+*************************************************************
+Generating : Bottom Paste
+      File : Mechalino_Second_Layer.GBP
+
+    Adding Layer      : Bottom Paste
+
+    Adding Layer      : Bottom Layer
+
+    Adding Layer      : Multi-Layer
+
+
+Used DCodes :
+*************************************************************
+
+*************************************************************
+Generating : Mechanical 1
+      File : Mechalino_Second_Layer.GM1
+
+    Adding Layer      : Mechanical 1
+
+
+Used DCodes :
+    D10
+    D42
+*************************************************************
+
+*************************************************************
+Generating : Top Assembly
+      File : Mechalino_Second_Layer.GM5
+
+    Adding Layer      : Top Assembly
+
+
+Used DCodes :
+    D13
+*************************************************************
+
+*************************************************************
+Generating : Bottom Courtyard
+      File : Mechalino_Second_Layer.GM21
+
+    Adding Layer      : Bottom Courtyard
+
+
+Used DCodes :
+    D43
+*************************************************************
+
+*************************************************************
+Generating : Top Component Outline
+      File : Mechalino_Second_Layer.GM11
+
+    Adding Layer      : Top Component Outline
+
+
+Used DCodes :
+    D43
+    D44
+    D45
+*************************************************************
+
+*************************************************************
+Generating : Top Component Center
+      File : Mechalino_Second_Layer.GM16
+
+    Adding Layer      : Top Component Center
+
+
+Used DCodes :
+    D43
+*************************************************************
+
+*************************************************************
+Generating : Top Designator
+      File : Mechalino_Second_Layer.GM3
+
+    Adding Layer      : Top Designator
+
+
+Used DCodes :
+    D10
+*************************************************************
+
+*************************************************************
+Generating : Bottom 3D Body
+      File : Mechalino_Second_Layer.GM23
+
+    Adding Layer      : Bottom 3D Body
+
+
+Used DCodes :
+    D43
 *************************************************************
 
 *************************************************************
@@ -273,15 +253,16 @@ Generating : Bottom Layer
 
 
 Used DCodes :
-    D24
-    D31
-    D32
+    D25
     D33
     D34
     D35
     D36
     D37
     D38
+    D39
+    D40
+    D41
 *************************************************************
 
 *************************************************************
@@ -294,21 +275,50 @@ Generating : Top Layer
 
 
 Used DCodes :
-    D17
     D18
     D19
     D20
     D21
     D22
-    D24
-    D31
-    D32
+    D23
+    D25
     D33
     D34
     D35
     D36
     D37
     D38
+    D39
+    D40
+    D41
+*************************************************************
+
+*************************************************************
+Generating : Top 3D Body
+      File : Mechalino_Second_Layer.GM13
+
+    Adding Layer      : Top 3D Body
+
+
+Used DCodes :
+    D10
+    D13
+    D43
+    D44
+    D45
+*************************************************************
+
+*************************************************************
+Generating : Top Courtyard
+      File : Mechalino_Second_Layer.GM15
+
+    Adding Layer      : Top Courtyard
+
+
+Used DCodes :
+    D13
+    D43
+    D46
 *************************************************************
 
 *************************************************************
@@ -321,8 +331,8 @@ Generating : Drill Drawing
 
 
 Used DCodes :
-    D42
-    D43
+    D47
+    D48
 *************************************************************
 
 *************************************************************
@@ -335,7 +345,7 @@ Generating : Drill Guide
 
 
 Used DCodes :
-    D42
+    D47
 *************************************************************
 
 *************************************************************
@@ -344,6 +354,6 @@ Generating : Profile
 
 
 Used DCodes :
-    D44
+    D49
 *************************************************************
 
