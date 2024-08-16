@@ -37,10 +37,10 @@
 /* Private typedef -----------------------------------------------------------*/
 /* USER CODE BEGIN PTD */
 typedef struct {
-    TIM_HandleTypeDef *htim;
-    uint32_t channel;
-    uint32_t current_pwm;
-    uint32_t target_pwm;
+	TIM_HandleTypeDef *htim;
+	uint32_t channel;
+	uint32_t current_pwm;
+	uint32_t target_pwm;
 } Servo;
 
 /* USER CODE END PTD */
@@ -52,6 +52,10 @@ typedef struct {
 #define SERVO_STOP 3000
 #define FORWARD_MAX 5100 //5100 max that works, but not max speed (4000)
 #define FORWARD_SLOW 3100 // 3250 starting actually to move normally, smaller than this, not usefull!
+
+#define ANGLE_THRESHOLD 5.0f  // Degrees
+#define DISTANCE_THRESHOLD 0.05f  // Distance threshold for considering the robot at the target
+#define ROTATION_TIME_360 3200 // 3.2 seconds for a 360-degree rotation
 /* USER CODE END PD */
 
 /* Private macro -------------------------------------------------------------*/
@@ -62,16 +66,26 @@ typedef struct {
 /* Private variables ---------------------------------------------------------*/
 
 /* USER CODE BEGIN PV */
-Servo servo_left = {&htim1, TIM_CHANNEL_1, SERVO_STOP, SERVO_STOP};
-Servo servo_right = {&htim2, TIM_CHANNEL_3, SERVO_STOP, SERVO_STOP};
+Servo servo_left = { &htim1, TIM_CHANNEL_1, SERVO_STOP, SERVO_STOP };
+Servo servo_right = { &htim2, TIM_CHANNEL_3, SERVO_STOP, SERVO_STOP };
 volatile int update_pwm_flag = 0;
 char rx_buffer[100];
 uint8_t rx_index = 0;
 volatile int rx_complete = 0;
 uint8_t UART1_rxBuffer[1] = { 0 };
 volatile uint16_t timer_count = 0;
-volatile uint16_t increment_speed = 10;
+volatile uint16_t increment_speed = 2000;
 
+float current_x = 0.0f;
+float current_y = 0.0f;
+float current_yaw = 0.0f;
+
+float target_x = 0.0f;
+float target_y = 0.0f;
+float target_yaw = 0.0f;
+
+float calculated_rotation_time = 0.0f;
+int target_set = 0;  // Flag to indicate if a target has been set
 /* USER CODE END PV */
 
 /* Private function prototypes -----------------------------------------------*/
@@ -81,7 +95,10 @@ void HAL_UART_RxCpltCallback(UART_HandleTypeDef *huart);
 void HAL_TIM_PeriodElapsedCallback(TIM_HandleTypeDef *htim);
 void execute_command(const char *cmd);
 void set_servo_pwm(Servo *servo, uint32_t pulse);
-void start_pwm_update(uint32_t left_target, uint32_t right_target, uint32_t duration_ms);
+void start_pwm_update(uint32_t left_target, uint32_t right_target,
+		uint32_t duration_ms);
+void navigate_to_target(void);
+void adjust_rotation(void);
 //void motor(uint16_t MotL, uint16_t MotR);
 int main(void);
 void Error_Handler(void);
@@ -104,103 +121,156 @@ void HAL_UART_RxCpltCallback(UART_HandleTypeDef *huart) {
 }
 
 void HAL_TIM_PeriodElapsedCallback(TIM_HandleTypeDef *htim) {
-    if (htim->Instance == TIM3) {
-        if (timer_count > 0) {
-        	timer_count--;
+	if (htim->Instance == TIM3) {
+		if (timer_count > 0) {
+			timer_count--;
 
-            // Update left servo PWM
-            if (servo_left.current_pwm != servo_left.target_pwm) {
-                if (servo_left.current_pwm < servo_left.target_pwm) {
-                    servo_left.current_pwm += increment_speed;
-                    if (servo_left.current_pwm > servo_left.target_pwm) {
-                        servo_left.current_pwm = servo_left.target_pwm;
-                    }
-                } else {
-                    servo_left.current_pwm -= increment_speed;
-                    if (servo_left.current_pwm < servo_left.target_pwm) {
-                        servo_left.current_pwm = servo_left.target_pwm;
-                    }
-                }
-                set_servo_pwm(&servo_left, servo_left.current_pwm);
-            }
+			// Update left servo PWM
+			if (servo_left.current_pwm != servo_left.target_pwm) {
+				if (servo_left.current_pwm < servo_left.target_pwm) {
+					servo_left.current_pwm += increment_speed;
+					if (servo_left.current_pwm > servo_left.target_pwm) {
+						servo_left.current_pwm = servo_left.target_pwm;
+					}
+				} else {
+					servo_left.current_pwm -= increment_speed;
+					if (servo_left.current_pwm < servo_left.target_pwm) {
+						servo_left.current_pwm = servo_left.target_pwm;
+					}
+				}
+				set_servo_pwm(&servo_left, servo_left.current_pwm);
+			}
 
-            // Update right servo PWM
-            if (servo_right.current_pwm != servo_right.target_pwm) {
-                if (servo_right.current_pwm < servo_right.target_pwm) {
-                    servo_right.current_pwm += increment_speed;
-                    if (servo_right.current_pwm > servo_right.target_pwm) {
-                        servo_right.current_pwm = servo_right.target_pwm;
-                    }
-                } else {
-                    servo_right.current_pwm -= increment_speed;
-                    if (servo_right.current_pwm < servo_right.target_pwm) {
-                        servo_right.current_pwm = servo_right.target_pwm;
-                    }
-                }
-                set_servo_pwm(&servo_right, servo_right.current_pwm);
-            }
+			// Update right servo PWM
+			if (servo_right.current_pwm != servo_right.target_pwm) {
+				if (servo_right.current_pwm < servo_right.target_pwm) {
+					servo_right.current_pwm += increment_speed;
+					if (servo_right.current_pwm > servo_right.target_pwm) {
+						servo_right.current_pwm = servo_right.target_pwm;
+					}
+				} else {
+					servo_right.current_pwm -= increment_speed;
+					if (servo_right.current_pwm < servo_right.target_pwm) {
+						servo_right.current_pwm = servo_right.target_pwm;
+					}
+				}
+				set_servo_pwm(&servo_right, servo_right.current_pwm);
+			}
 
-            // Stop servos when duration expires
-            if (timer_count == 0) {
-                set_servo_pwm(&servo_left, SERVO_STOP); // Stop left servo
-                set_servo_pwm(&servo_right, SERVO_STOP); // Stop right servo
-                HAL_TIM_Base_Stop_IT(htim); // Stop the timer
-            }
-        }
-    }
+			// Stop servos when duration expires
+			if (timer_count == 0) {
+				set_servo_pwm(&servo_left, SERVO_STOP); // Stop left servo
+				set_servo_pwm(&servo_right, SERVO_STOP); // Stop right servo
+				HAL_TIM_Base_Stop_IT(htim); // Stop the timer
+			}
+		}
+	}
 }
 
-
 void execute_command(const char *cmd) {
-	switch (cmd[0]) {
-	case 'M': { // Move command with flexible parameters
-		uint16_t arg1, arg2, arg3 = 0;
-		int count = sscanf(cmd + 1, "%" SCNu16 " %" SCNu16 " %" SCNu16, &arg1,
-				&arg2, &arg3);
-
-		if (count == 2) {
-			// Only speed and duration provided
-			arg1 = (arg1 >= BACKWARD_MAX && arg1 <= FORWARD_MAX) ? arg1 : SERVO_STOP;
-			start_pwm_update(arg1, arg1, arg2);
-		} else if (count == 3) {
-			// Speed, SpeedM2 and duration
-			arg1 = (arg1 >= BACKWARD_MAX && arg1 <= FORWARD_MAX) ? arg1 : SERVO_STOP;
-			arg2 = (arg2 >= BACKWARD_MAX && arg2 <= FORWARD_MAX) ? arg2 : SERVO_STOP;
-			start_pwm_update(arg1, arg2, arg3);
-		} else {
-			// Handle error: insufficient or incorrect parameters
-			printf("Invalid parameters for MOVE command.\n");
-		}
-		break;
-	}
-	case 'R': { // Rotate command
-		break;
-	}
-	case 'S': // Stop command
-		// stop();
+	if (strncmp(cmd, "STOP", 4) == 0) {
 		start_pwm_update(SERVO_STOP, SERVO_STOP, 1);
-		// move();
-		break;
-	default:
-		// Handle invalid command
-		printf("Unknown command: %c\n", cmd[0]);
-		break;
+	} else if (strncmp(cmd, "START_SPINNING", 14) == 0) {
+		start_pwm_update(FORWARD_MAX, FORWARD_MAX, 50000); // Example to spin in place
+	} else if (strncmp(cmd, "LOCATION_UPDATE", 15) == 0) {
+		sscanf(cmd + 16, "%f;%f;%f", &current_x, &current_y, &current_yaw);
+		if (target_set) {
+			adjust_rotation(); // Adjust rotation based on the latest location only if a target is set
+		}
+		//printf("Current Location: X=%.4f, Y=%.4f, Yaw=%.4f",current_x, current_y, current_yaw);
+	} else if (strncmp(cmd, "TARGET_UPDATE", 13) == 0) {
+		sscanf(cmd + 14, "%f;%f;%f", &target_x, &target_y, &target_yaw);
+		target_set = 1; // Set the target flag
+		navigate_to_target();
+		//printf("Target Location: X=%.4f, Y=%.4f, Yaw=%.4f",target_x, target_y, target_yaw);
+	} else {
+		//printf("Unknown command: %s\n", cmd);
 	}
 }
 
 void set_servo_pwm(Servo *servo, uint32_t pulse) {
-    servo->current_pwm = pulse;
-    __HAL_TIM_SET_COMPARE(servo->htim, servo->channel, pulse);
+	servo->current_pwm = pulse;
+	__HAL_TIM_SET_COMPARE(servo->htim, servo->channel, pulse);
 }
 
-
-void start_pwm_update(uint32_t left_target, uint32_t right_target, uint32_t duration_ms) {
-    servo_left.target_pwm = left_target;
-    servo_right.target_pwm = right_target;
-    timer_count = duration_ms;
-    HAL_TIM_Base_Start_IT(&htim3); // Start the timer with interrupt
+void start_pwm_update(uint32_t left_target, uint32_t right_target,
+		uint32_t duration_ms) {
+	servo_left.target_pwm = left_target;
+	servo_right.target_pwm = right_target;
+	timer_count = duration_ms;
+	HAL_TIM_Base_Start_IT(&htim3); // Start the timer with interrupt
 }
 
+void navigate_to_target(void) {
+	// Calculate the angle to the target
+	float dx = target_x - current_x;
+	float dy = target_y - current_y;
+	float target_angle = atan2f(dy, dx) * 180.0f / M_PI; // Convert to degrees
+
+	// Ensure target_angle is in the range -180 to 180
+	if (target_angle > 180.0f) {
+		target_angle -= 360.0f;
+	} else if (target_angle < -180.0f) {
+		target_angle += 360.0f;
+	}
+
+	// Calculate the angle difference
+	float angle_difference = target_angle - current_yaw;
+
+	// Normalize angle difference to be within -180 to 180 degrees
+	if (angle_difference > 180.0f) {
+		angle_difference -= 360.0f;
+	} else if (angle_difference < -180.0f) {
+		angle_difference += 360.0f;
+	}
+
+	// Calculate rotation time based on angle difference
+	calculated_rotation_time = fabsf(angle_difference)
+			/ 360.0f* ROTATION_TIME_360;
+
+	// Rotate the robot in place
+	if (angle_difference > 0) {
+		start_pwm_update(FORWARD_SLOW, FORWARD_SLOW,
+				(uint32_t) calculated_rotation_time); // Rotate clockwise
+	} else {
+		start_pwm_update(BACKWARD_SLOW, BACKWARD_SLOW,
+				(uint32_t) calculated_rotation_time); // Rotate counterclockwise
+	}
+
+	// After rotation, wait for the next location update to adjust further
+}
+
+void adjust_rotation(void) {
+	// This function will be called upon receiving a LOCATION_UPDATE
+	// It checks if further rotation is needed or if the robot can move forward
+
+	// Calculate the angle to the target again
+	float dx = target_x - current_x;
+	float dy = target_y - current_y;
+	float target_angle = atan2f(dy, dx) * 180.0f / M_PI; // Convert to degrees
+
+	if (target_angle > 180.0f) {
+		target_angle -= 360.0f;
+	} else if (target_angle < -180.0f) {
+		target_angle += 360.0f;
+	}
+
+	float angle_difference = target_angle - current_yaw;
+
+	if (angle_difference > 180.0f) {
+		angle_difference -= 360.0f;
+	} else if (angle_difference < -180.0f) {
+		angle_difference += 360.0f;
+	}
+
+	// If the robot is aligned with the target, move forward
+	if (fabsf(angle_difference) <= ANGLE_THRESHOLD) {
+		start_pwm_update(FORWARD_SLOW, BACKWARD_SLOW, 500); // Move forward
+	} else {
+		// Otherwise, adjust rotation
+		navigate_to_target();
+	}
+}
 
 //void motor(uint16_t MotL, uint16_t MotR) {
 ////	uint32_t cntL, cntR;
