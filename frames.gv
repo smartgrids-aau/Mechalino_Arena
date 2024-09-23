@@ -1,0 +1,8 @@
+digraph G {
+"camera" -> "table"[label="Broadcaster: /table_tf_publisher\nAverage rate: 3.214 Hz\nMost recent transform: 1715599403.006 ( 0.107 sec old)\nBuffer length: 4.667 sec\n"];
+"table" -> "mechalino_15"[label="Broadcaster: /robots_publisher\nAverage rate: 2.582 Hz\nMost recent transform: 1715599403.045 ( 0.068 sec old)\nBuffer length: 4.647 sec\n"];
+edge [style=invis];
+ subgraph cluster_legend { style=bold; color=black; label ="view_frames Result";
+"Recorded at time: 1715599403.113"[ shape=plaintext ] ;
+ }->"camera";
+}
