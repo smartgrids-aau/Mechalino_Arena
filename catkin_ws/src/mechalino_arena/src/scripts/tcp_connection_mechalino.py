@@ -114,6 +114,20 @@ def handle_client(client_socket: socket.socket, address: tuple):
                         response = "ERROR Invalid format for REQUEST_TARGET_UPDATE"
                     print(f"Sent target update for robot {robot_id}: {response}")
 
+                    # Neue Funktionalität: Behandle REQUEST_PATH_UPDATE Nachricht
+                elif message == "REQUEST_PATH_UPDATE":
+                    try:
+                        # Pfad als String formatieren: x0;y0;yaw0;x1;y1;yaw1;...;xn;yn;yawn
+                        path_str = ";".join([f"{x}:{y}:{yaw}" for x, y, yaw in route])
+                        response = f"PATH_UPDATE {path_str}"
+                        client_socket.send((response + "\n").encode())
+                        print(f"Sent path update: {response}")
+                    except Exception as e:
+                        print(f"Error in processing REQUEST_PATH_UPDATE: {e}")
+                        response = "ERROR Unable to process REQUEST_PATH_UPDATE"
+                        client_socket.send((response + "\n").encode())
+
+
     except Exception as e:
         print("Client disconnected:", e)
     finally:
@@ -156,7 +170,7 @@ if __name__ == '__main__':
         rospy.init_node('robot_position_yaw_tcp', anonymous=True)
 
         for i in range(61):
-            topic_name = f"/pos/mechalino_new{i}"
+            topic_name = f"/pos/mechalino_{i}"
             rospy.Subscriber(topic_name, Float32MultiArray, callback)
 
         rospy.spin()
