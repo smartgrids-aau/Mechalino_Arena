@@ -43,6 +43,18 @@ typedef struct {
 	uint32_t target_pwm;
 } Servo;
 
+typedef enum {
+	IDLE, ROTATING, MOVING
+} RobotState;
+
+typedef struct {
+	float integral;
+	float previous_error;
+	float kp;
+	float ki;
+	float kd;
+} PIDController;
+
 /* USER CODE END PTD */
 
 /* Private define ------------------------------------------------------------*/
@@ -53,9 +65,14 @@ typedef struct {
 #define FORWARD_MAX 5100 //5100 max that works, but not max speed (4000)
 #define FORWARD_SLOW 3100 // 3250 starting actually to move normally, smaller than this, not usefull!
 
-#define ANGLE_THRESHOLD 5.0f  // Degrees
-#define DISTANCE_THRESHOLD 0.05f  // Distance threshold for considering the robot at the target
+#define ANGLE_THRESHOLD 6.0f  // Degrees
+#define DISTANCE_THRESHOLD 0.12f  // Distance threshold for considering the robot at the target
 #define ROTATION_TIME_360 3200 // 3.2 seconds for a 360-degree rotation
+#define MAX_SPEED 5 // 5 centimeters per second
+
+#define KP 1.0f  // Proportional gain
+#define KI 0.1f  // Integral gain
+#define KD 0.01f // Derivative gain
 /* USER CODE END PD */
 
 /* Private macro -------------------------------------------------------------*/
@@ -68,13 +85,17 @@ typedef struct {
 /* USER CODE BEGIN PV */
 Servo servo_left = { &htim1, TIM_CHANNEL_1, SERVO_STOP, SERVO_STOP };
 Servo servo_right = { &htim2, TIM_CHANNEL_3, SERVO_STOP, SERVO_STOP };
+volatile RobotState current_state = IDLE;
+PIDController rotation_pid = { 0.0f, 0.0f, 1.0f, 0.1f, 0.01f }; // Tuning for rotation
+PIDController movement_pid = { 0.0f, 0.0f, 1.0f, 0.1f, 0.01f }; // Tuning for movement
 volatile int update_pwm_flag = 0;
 char rx_buffer[100];
 uint8_t rx_index = 0;
 volatile int rx_complete = 0;
 uint8_t UART1_rxBuffer[1] = { 0 };
 volatile uint16_t timer_count = 0;
-volatile uint16_t increment_speed = 2000;
+volatile uint16_t timer_ms_counter = 0;
+volatile uint16_t increment_speed = 500;
 
 float current_x = 0.0f;
 float current_y = 0.0f;
@@ -82,7 +103,13 @@ float current_yaw = 0.0f;
 
 float target_x = 0.0f;
 float target_y = 0.0f;
-float target_yaw = 0.0f;
+
+float previous_x = 0.0f;
+float previous_y = 0.0f;
+float previous_yaw = 0.0f;
+
+float previous_error = 0.0f;
+float integral = 0.0f;
 
 float calculated_rotation_time = 0.0f;
 int target_set = 0;  // Flag to indicate if a target has been set
@@ -98,11 +125,18 @@ void set_servo_pwm(Servo *servo, uint32_t pulse);
 void start_pwm_update(uint32_t left_target, uint32_t right_target,
 		uint32_t duration_ms);
 void navigate_to_target(void);
+float pid_controller(PIDController *pid, float setpoint, float measured_value);
 void adjust_rotation(void);
+float distance_to_target(float current_x, float current_y, float target_x,
+		float target_y);
+void handle_movement();
+void handle_rotation();
+float calculate_angle(float x, float y, float x_next, float y_next);
 //void motor(uint16_t MotL, uint16_t MotR);
 int main(void);
 void Error_Handler(void);
 void assert_failed(uint8_t *file, uint32_t line);
+
 /* USER CODE END PFP */
 
 /* Private user code ---------------------------------------------------------*/
@@ -118,6 +152,17 @@ void HAL_UART_RxCpltCallback(UART_HandleTypeDef *huart) {
 		}
 		HAL_UART_Receive_IT(&huart1, UART1_rxBuffer, 1); // Listen for next character
 	}
+}
+
+float pid_controller(PIDController *pid, float setpoint, float measured_value) {
+	float error = setpoint - measured_value;
+	pid->integral += error;
+	float derivative = error - pid->previous_error;
+	pid->previous_error = error;
+
+	float output = pid->kp * error + pid->ki * pid->integral
+			+ pid->kd * derivative;
+	return output;
 }
 
 void HAL_TIM_PeriodElapsedCallback(TIM_HandleTypeDef *htim) {
@@ -165,24 +210,145 @@ void HAL_TIM_PeriodElapsedCallback(TIM_HandleTypeDef *htim) {
 			}
 		}
 	}
+	if (htim->Instance == TIM4) {
+//		timer_ms_counter++;  // Increment every 1ms
+//
+//		if (timer_ms_counter >= 150) {  // Trigger every 150ms
+//			timer_ms_counter = 0;  // Reset counter
+//			// Periodic check to update motion
+//			switch (current_state) {
+//			case ROTATING:
+//				// Adjust rotation using PID
+//				handle_rotation();
+//				break;
+//			case MOVING:
+//				// Adjust movement using PID
+//				handle_movement();
+//				break;
+//			case IDLE:
+//				// Do nothing
+//				break;
+//			}
+//		}
+	}
+}
+
+void handle_rotation() {
+	float target_angle = calculate_angle(current_x, current_y, target_x,
+			target_y);
+	float angle_error = target_angle - current_yaw;
+
+	// Normalize the angle error to always choose the shortest rotation path
+	if (angle_error > 180) {
+		angle_error -= 360;
+	} else if (angle_error < -180) {
+		angle_error += 360;
+	}
+
+	if (fabsf(angle_error) > ANGLE_THRESHOLD) {
+		// PID-based correction for rotation
+		float rotation_correction = pid_controller(&rotation_pid, target_angle,
+				current_yaw);
+
+		if (angle_error > 0) {
+			// Rotate right: Both motors move forward speed
+			uint32_t left_pwm = fmaxf(FORWARD_SLOW,
+			FORWARD_MAX - rotation_correction);
+			uint32_t right_pwm = fmaxf(FORWARD_SLOW,
+			FORWARD_MAX - rotation_correction);
+			start_pwm_update(left_pwm, right_pwm, 300); // Rotate right for 400ms
+		} else {
+			// Rotate left: Both motors move backward speed
+			uint32_t left_pwm = fminf(BACKWARD_SLOW,
+			BACKWARD_MAX + rotation_correction);
+			uint32_t right_pwm = fminf(BACKWARD_SLOW,
+			BACKWARD_MAX + rotation_correction);
+			start_pwm_update(left_pwm, right_pwm, 300); // Rotate left for 400ms
+		}
+	} else {
+		// Stop rotating and switch to moving state
+		start_pwm_update(SERVO_STOP, SERVO_STOP, 1);
+		current_state = MOVING;
+	}
+}
+
+void handle_movement() {
+	float distance = distance_to_target(current_x, current_y, target_x,
+			target_y);
+
+	if (distance > DISTANCE_THRESHOLD) {
+		// PID-based correction for forward movement
+		float movement_correction = pid_controller(&movement_pid, distance, 0);
+
+		// Move forward with one motor forward, one backward
+		uint32_t left_pwm = fmaxf(FORWARD_SLOW,
+		FORWARD_MAX - movement_correction);  // Left motor forward
+		uint32_t right_pwm = fminf(BACKWARD_SLOW,
+		BACKWARD_MAX + movement_correction);  // Right motor backward
+		start_pwm_update(left_pwm, right_pwm, 300);  // Move forward for 400ms
+	} else {
+		// Stop the robot when it reaches the target
+		start_pwm_update(SERVO_STOP, SERVO_STOP, 1);
+		current_state = IDLE;
+	}
+}
+
+float calculate_angle(float x, float y, float x_next, float y_next) {
+	// Berechnung des Skalarprodukts
+	float dot_product = -y * (y_next - y);
+
+	// Länge der Vektoren
+	float length_v1 = fabsf(y); // Da v1 die Länge von (0, -y) ist, entspricht die Länge |y|
+	float length_v2 = (float) sqrt(pow(x_next - x, 2) + pow(y_next - y, 2));
+
+	// Berechnung des Kosinus des Winkels
+	float cos_theta = dot_product / (length_v1 * length_v2);
+
+	// Berechnung des Winkels in Radiant und Umwandlung in Grad
+	float theta_rad = (float) acos(cos_theta);
+	float theta_deg = (float) (theta_rad * (180.0 / M_PI));
+
+	// Bestimmen der Richtung
+	if (x_next < x) {
+		theta_deg = -theta_deg; // Negativer Winkel, wenn x_next links von x ist
+	}
+
+	return theta_deg;
+}
+
+float distance_to_target(float current_x, float current_y, float target_x,
+		float target_y) {
+	return sqrt(pow(target_x - current_x, 2) + pow(target_y - current_y, 2));
 }
 
 void execute_command(const char *cmd) {
 	if (strncmp(cmd, "STOP", 4) == 0) {
 		start_pwm_update(SERVO_STOP, SERVO_STOP, 1);
+		target_set = 0; // Set the target flag
 	} else if (strncmp(cmd, "START_SPINNING", 14) == 0) {
 		start_pwm_update(FORWARD_MAX, FORWARD_MAX, 50000); // Example to spin in place
+		target_set = 0; // Set the target flag
 	} else if (strncmp(cmd, "LOCATION_UPDATE", 15) == 0) {
 		sscanf(cmd + 16, "%f;%f;%f", &current_x, &current_y, &current_yaw);
 		if (target_set) {
-			adjust_rotation(); // Adjust rotation based on the latest location only if a target is set
+			// Check if we need to rotate or move forward
+			float target_angle = calculate_angle(current_x, current_y, target_x,
+					target_y);
+			float angle_error = target_angle - current_yaw;
+
+			if (fabsf(angle_error) > ANGLE_THRESHOLD) {
+				current_state = ROTATING;  // Start rotating incrementally
+			} else {
+				current_state = MOVING;  // Start moving forward incrementally
+			}
 		}
 		//printf("Current Location: X=%.4f, Y=%.4f, Yaw=%.4f",current_x, current_y, current_yaw);
 	} else if (strncmp(cmd, "TARGET_UPDATE", 13) == 0) {
-		sscanf(cmd + 14, "%f;%f;%f", &target_x, &target_y, &target_yaw);
+		sscanf(cmd + 14, "%f;%f", &target_x, &target_y);
 		target_set = 1; // Set the target flag
-		navigate_to_target();
-		//printf("Target Location: X=%.4f, Y=%.4f, Yaw=%.4f",target_x, target_y, target_yaw);
+		//printf("Target Location: X=%.4f, Y=%.4f",target_x, target_y);
+		// Recalculate direction to target and start movement
+		current_state = ROTATING;  // Start with rotating to face the target
 	} else {
 		//printf("Unknown command: %s\n", cmd);
 	}
@@ -200,87 +366,6 @@ void start_pwm_update(uint32_t left_target, uint32_t right_target,
 	timer_count = duration_ms;
 	HAL_TIM_Base_Start_IT(&htim3); // Start the timer with interrupt
 }
-
-void navigate_to_target(void) {
-	// Calculate the angle to the target
-	float dx = target_x - current_x;
-	float dy = target_y - current_y;
-	float target_angle = atan2f(dy, dx) * 180.0f / M_PI; // Convert to degrees
-
-	// Ensure target_angle is in the range -180 to 180
-	if (target_angle > 180.0f) {
-		target_angle -= 360.0f;
-	} else if (target_angle < -180.0f) {
-		target_angle += 360.0f;
-	}
-
-	// Calculate the angle difference
-	float angle_difference = target_angle - current_yaw;
-
-	// Normalize angle difference to be within -180 to 180 degrees
-	if (angle_difference > 180.0f) {
-		angle_difference -= 360.0f;
-	} else if (angle_difference < -180.0f) {
-		angle_difference += 360.0f;
-	}
-
-	// Calculate rotation time based on angle difference
-	calculated_rotation_time = fabsf(angle_difference)
-			/ 360.0f* ROTATION_TIME_360;
-
-	// Rotate the robot in place
-	if (angle_difference > 0) {
-		start_pwm_update(FORWARD_SLOW, FORWARD_SLOW,
-				(uint32_t) calculated_rotation_time); // Rotate clockwise
-	} else {
-		start_pwm_update(BACKWARD_SLOW, BACKWARD_SLOW,
-				(uint32_t) calculated_rotation_time); // Rotate counterclockwise
-	}
-
-	// After rotation, wait for the next location update to adjust further
-}
-
-void adjust_rotation(void) {
-	// This function will be called upon receiving a LOCATION_UPDATE
-	// It checks if further rotation is needed or if the robot can move forward
-
-	// Calculate the angle to the target again
-	float dx = target_x - current_x;
-	float dy = target_y - current_y;
-	float target_angle = atan2f(dy, dx) * 180.0f / M_PI; // Convert to degrees
-
-	if (target_angle > 180.0f) {
-		target_angle -= 360.0f;
-	} else if (target_angle < -180.0f) {
-		target_angle += 360.0f;
-	}
-
-	float angle_difference = target_angle - current_yaw;
-
-	if (angle_difference > 180.0f) {
-		angle_difference -= 360.0f;
-	} else if (angle_difference < -180.0f) {
-		angle_difference += 360.0f;
-	}
-
-	// If the robot is aligned with the target, move forward
-	if (fabsf(angle_difference) <= ANGLE_THRESHOLD) {
-		start_pwm_update(FORWARD_SLOW, BACKWARD_SLOW, 500); // Move forward
-	} else {
-		// Otherwise, adjust rotation
-		navigate_to_target();
-	}
-}
-
-//void motor(uint16_t MotL, uint16_t MotR) {
-////	uint32_t cntL, cntR;
-////	cntL = (uint32_t) MotL; //value of PWM start at 2000 and finish at 4000
-////	cntR = (uint32_t) MotR;
-////	TIM2->CCR3 = cntL; //put value on TIMERs registers
-////	TIM1->CCR1 = cntR; //put value on TIMERs registers
-//	set_servo_pwm(&htim1, TIM_CHANNEL_1, (uint32_t) MotL); // Forward motion
-//	set_servo_pwm(&htim2, TIM_CHANNEL_3, (uint32_t) MotR);  // Backward motion
-//}
 
 /* USER CODE END 0 */
 
@@ -318,6 +403,7 @@ int main(void) {
 	MX_I2C1_Init();
 	MX_ADC1_Init();
 	MX_TIM3_Init();
+	MX_TIM4_Init();
 	/* USER CODE BEGIN 2 */
 
 	HAL_GPIO_WritePin(GPIOC, GPIO_PIN_13, GPIO_PIN_SET);
@@ -344,6 +430,8 @@ int main(void) {
 	TIM2->CR1 = 0x01;
 	HAL_UART_Receive_IT(&huart1, UART1_rxBuffer, sizeof(UART1_rxBuffer)); // interrupt based
 
+	HAL_TIM_Base_Start_IT(&htim4); // Start TIM4 interrupt at startup (only once)
+
 	HAL_GPIO_WritePin(GPIOC, GPIO_PIN_13, GPIO_PIN_RESET);
 	/* USER CODE END 2 */
 
@@ -354,6 +442,20 @@ int main(void) {
 			execute_command(rx_buffer); // Process the command
 			rx_complete = 0; // Reset the completion flag
 		}
+		switch (current_state) {
+		case ROTATING:
+			// Adjust rotation using PID
+			handle_rotation();
+			break;
+		case MOVING:
+			// Adjust movement using PID
+			handle_movement();
+			break;
+		case IDLE:
+			// Do nothing
+			break;
+		}
+
 		/* USER CODE END WHILE */
 
 		/* USER CODE BEGIN 3 */

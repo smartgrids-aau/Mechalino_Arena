@@ -24,7 +24,14 @@ enum RobotState { CONNECTING,
 RobotState currentState = CONNECTING;
 
 unsigned long lastRequestTime = 0;
-unsigned long requestInterval = 500;
+unsigned long requestInterval = 300;
+bool sentRequest = false;
+
+void setup();
+void sendTCP(String message);
+void handleState(RobotState& state);
+void sendStatusUDP();
+void setup();
 
 void setup() {
   Serial.begin(9600);
@@ -45,19 +52,31 @@ void setup() {
   currentState = CONNECTING;
 }
 
-void loop() {
-  switch (currentState) {
+void sendTCP(String message) {
+  if (millis() - lastRequestTime >= requestInterval) {
+    lastRequestTime = millis();
+    if (!sentRequest) {
+      sentRequest = true;
+      client.print(message);
+    }
+  }
+}
+
+void handleState(RobotState& state) {
+  String messageToSend = "";
+  switch (state) {
     case CONNECTING:
       // Connect to ROS server
       if (WiFi.status() == WL_CONNECTED) {
         if (client.connect(server_ip, server_port)) {
           //Serial.println("Connected to server!");
           if (robotID == "") {
-            currentState = REGISTERING;
-            client.println("REGISTER");
+            state = REGISTERING;
+            messageToSend = "REGISTER";
+            sendTCP(messageToSend);
             //Serial.println("REGISTER sent to server");
           } else {
-            currentState = REGISTERED;
+            state = REGISTERED;
           }
         } else {
           //Serial.println("Connection to server failed, retrying...");
@@ -88,35 +107,46 @@ void loop() {
             robotID = message.substring(message.indexOf(' ') + 1);
             //Serial.println("Registration complete. Robot ID: " + robotID);
             Serial.println("STOP");
-            currentState = REGISTERED;
+            state = REGISTERED;
           }
         }
       } else {
-        currentState = REGISTERED;
+        state = REGISTERED;
       }
       break;
 
     case REGISTERED:
       if (client.connected() && (robotID != "")) {
-        client.println("REQUEST_LOCATION_UPDATE " + robotID);
+        //messageToSend = "REQUEST_LOCATION_UPDATE " + robotID;
+        //sendTCP(messageToSend);
         //Serial.println("REQUEST_LOCATION_UPDATE with robotID sent to server");
-        currentState = LOCATION_REQUEST;
+        state = LOCATION_REQUEST;
+        sentRequest = false;
       } else {
         //Serial.println("Server connection lost, reconnecting...");
-        currentState = CONNECTING;
+        state = CONNECTING;
       }
       break;
 
     case LOCATION_REQUEST:
-      if (millis() - lastRequestTime >= requestInterval) {
+      /*if (millis() - lastRequestTime >= requestInterval) {
         lastRequestTime = millis();
         if (client.connected() && (robotID != "")) {
-          client.println("REQUEST_LOCATION_UPDATE " + robotID);
+          messageToSend = "REQUEST_LOCATION_UPDATE " + robotID;
+          sendTCP(messageToSend);
           //Serial.println("REQUEST_LOCATION_UPDATE with robotID sent to server");
         } else {
           //Serial.println("Server connection lost, reconnecting...");
-          currentState = CONNECTING;
+          state = CONNECTING;
         }
+      }*/
+      if (client.connected() && (robotID != "")) {
+        messageToSend = "REQUEST_LOCATION_UPDATE " + robotID;
+        sendTCP(messageToSend);
+        //Serial.println("REQUEST_LOCATION_UPDATE with robotID sent to server");
+      } else {
+        //Serial.println("Server connection lost, reconnecting...");
+        state = CONNECTING;
       }
 
       if (client.connected() && client.available() > 0) {
@@ -136,51 +166,66 @@ void loop() {
           // Create a formatted string for the STM32: "x;y;yaw"
           currentLocation = xValue + ";" + yValue + ";" + yawValue;
           Serial.println("LOCATION_UPDATE " + currentLocation);
-          currentState = TARGET_REQUEST;
+          state = TARGET_REQUEST;
+          sentRequest = false;
+        } else if (message.startsWith("REGISTER")) {
+          robotID = "";
+          state = CONNECTING;
         }
       }
       break;
 
     case TARGET_REQUEST:
-      if (millis() - lastRequestTime >= requestInterval) {
+      /*if (millis() - lastRequestTime >= requestInterval) {
         lastRequestTime = millis();
         if (client.connected() && (robotID != "")) {
-          client.println("REQUEST_TARGET_UPDATE " + robotID);
+          messageToSend = "REQUEST_TARGET_UPDATE " + robotID;
+          sendTCP(messageToSend);
         } else {
           //Serial.println("Server connection lost, reconnecting...");
-          currentState = CONNECTING;
+          state = CONNECTING;
         }
+      }*/
+      if (client.connected() && (robotID != "")) {
+        messageToSend = "REQUEST_TARGET_UPDATE " + robotID;
+        sendTCP(messageToSend);
+      } else {
+        //Serial.println("Server connection lost, reconnecting...");
+        state = CONNECTING;
       }
 
       if (client.connected() && client.available() > 0) {
         String message = client.readStringUntil('\n');
         //Serial.print("Message from server: ");
         //Serial.println(message);
-        if (message.startsWith("TARGET_UPDATE") && message.endsWith(robotID)) {  // "LOCATION_UPDATE x:x_next;y:y_next;yaw:yaw_next robotID"
-          // Extract x, y, yaw values
+        if (message.startsWith("TARGET_UPDATE") && message.endsWith(robotID)) {  // "LOCATION_UPDATE x:x_next;y:y_next robotID"
+          // Extract x, y values
           int xIndex = message.indexOf("x:") + 2;
           int yIndex = message.indexOf("y:") + 2;
-          int yawIndex = message.indexOf("yaw:") + 4;
 
           String xValue = message.substring(xIndex, message.indexOf(';', xIndex));
           String yValue = message.substring(yIndex, message.indexOf(';', yIndex));
-          String yawValue = message.substring(yawIndex, message.lastIndexOf(' '));
 
-          // Create a formatted string for the STM32: "x;y;yaw"
-          targetLocation = xValue + ";" + yValue + ";" + yawValue;
+          // Create a formatted string for the STM32: "x;y"
+          targetLocation = xValue + ";" + yValue;
           Serial.println("TARGET_UPDATE " + targetLocation);
-          currentState = LOCATION_REQUEST;
+          state = LOCATION_REQUEST;
+          sentRequest = false;
 
         } else if (message.startsWith("STOP_MOVEMENT")) {
           //Serial.println("Received STOP_MOVEMENT, listening for further commands");
-          currentState = END;
+          state = END;
           Serial.println("STOP");
+        } else if (message.startsWith("REGISTER")) {
+          robotID = "";
+          state = CONNECTING;
         }
       }
       break;
 
     case END:
       if (client.connected() && client.available() > 0) {
+        sentRequest = false;
         String message = client.readStringUntil('\n');
         Serial.print("Message from server: ");
         Serial.println(message);
@@ -190,16 +235,19 @@ void loop() {
           Serial.println("TARGET_UPDATE " + targetData);
         } else if (message == "STOP_MOVEMENT") {
           //Serial.println("Received STOP_MOVEMENT, listening for further commands");
-          currentState = REGISTERED;
+          state = REGISTERED;
         }*/
       }
       break;
   }
-  if ((currentState != CONNECTING) && !client.connected()) {
+  if ((state != CONNECTING) && !client.connected()) {
     //Serial.println("Server connection lost, reconnecting...");
-    currentState = CONNECTING;
+    state = CONNECTING;
+    sentRequest = false;
   }
+}
 
+void sendStatusUDP() {
   // Send UDP broadcast with robot status
   if (robotID != "") {
     String udpMessage = robotID + ";" + currentLocation + ";" + targetLocation;
@@ -209,6 +257,10 @@ void loop() {
   }
 }
 
+void loop() {
+  handleState(currentState);
+  /*send_status_udp()*/
+}
 
 /*
 // Connect to ROS server
@@ -219,7 +271,8 @@ void loop() {
   Serial.println("Connected to server!");
 
   // Start registration process
-  client.println("REGISTER");
+  messageToSend = "REGISTER";
+  sendTCP(messageToSend);
 */
 
 /*
@@ -252,7 +305,8 @@ if (client.connected()) {
     static unsigned long lastRequestTime = 0;
     if (millis() - lastRequestTime >= 1000) {
       lastRequestTime = millis();
-      client.println("REQUEST_LOCATION_UPDATE");
+      messageToSend = "REQUEST_LOCATION_UPDATE";
+      sendTCP(messageToSend);
     }
 
   } else {
@@ -263,7 +317,8 @@ if (client.connected()) {
     } else {
       Serial.println("Reconnected to server");
       if (robotID != "") {
-        client.println("RECONNECT " + robotID);
+        messageToSend = RECONNECT " + robotID;
+        sendTCP(messageToSend);
       }
     }
   }
