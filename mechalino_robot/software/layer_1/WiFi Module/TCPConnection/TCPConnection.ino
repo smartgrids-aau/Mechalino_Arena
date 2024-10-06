@@ -1,10 +1,9 @@
 #include <ESP8266WiFi.h>
 #include <WiFiUdp.h>
 
-/* Wi-Fi and Server Configuration */
 const char* ssid = "ROBOT_AP";
 const char* password = "Robot4321";
-const uint16_t serverPort = 5000;
+const uint16_t server_port = 5000;
 const int udpPort = 4210;                    // UDP broadcast port
 const char* udpAddress = "255.255.255.255";  // Broadcast address
 IPAddress serverIP;
@@ -20,16 +19,14 @@ String targetLocation = "";
 String pathLocations = "";
 
 /* Enumeration for Robot States */
-enum RobotState {
-  CONNECTING,
-  REGISTERING,
-  SPINNING,
-  REGISTERED,
-  LOCATION_REQUEST,
-  //TARGET_REQUEST,
-  PATH_REQUEST,
-  END
-};
+enum RobotState { CONNECTING,
+                  REGISTERING,
+                  SPINNING,
+                  REGISTERED,
+                  LOCATION_REQUEST,
+                  TARGET_REQUEST,
+                  PATH_REQUEST,
+                  END };
 RobotState currentState = CONNECTING;
 
 /* Timing Variables */
@@ -55,7 +52,9 @@ void setup() {
   // Connect to Wi-Fi
   while (WiFi.status() != WL_CONNECTED) {
     delay(1000);
+    Serial.println("Connecting to WiFi...");
   }
+  Serial.println("Connected to WiFi!");
   serverIP = WiFi.gatewayIP();
 
   // Initialize UDP
@@ -95,12 +94,11 @@ void sendTCP(const String& message) {
  */
 void handleState(RobotState& state) {
   String messageToSend = "";
-
   switch (state) {
     case CONNECTING:
       // Connect to ROS server
       if (WiFi.status() == WL_CONNECTED) {
-        if (client.connect(serverIP, serverPort)) {
+        if (client.connect(serverIP, server_port)) {
           if (robotID == "") {
             state = REGISTERING;
             messageToSend = "REGISTER";
@@ -193,30 +191,35 @@ void handleState(RobotState& state) {
       }
       break;
 
-      /*case TARGET_REQUEST:
+    /*case TARGET_REQUEST:
       if (client.connected() && (robotID != "")) {
         messageToSend = "REQUEST_TARGET_UPDATE " + robotID;
         sendTCP(messageToSend);
       } else {
+        //Serial.println("Server connection lost, reconnecting...");
         state = CONNECTING;
       }
 
       if (client.connected() && client.available() > 0) {
         String message = client.readStringUntil('\n');
-        if (message.startsWith("TARGET_UPDATE") && message.endsWith(robotID)) {  // "TARGET_UPDATE x:x_next;y:y_next robotID"
+        //Serial.print("Message from server: ");
+        //Serial.println(message);
+        if (message.startsWith("TARGET_UPDATE") && message.endsWith(robotID)) {  // "LOCATION_UPDATE x:x_next;y:y_next robotID"
           // Extract x, y values
           int xIndex = message.indexOf("x:") + 2;
           int yIndex = message.indexOf("y:") + 2;
 
           String xValue = message.substring(xIndex, message.indexOf(';', xIndex));
-          String yValue = message.substring(yIndex, message.indexOf(' ', yIndex));
+          String yValue = message.substring(yIndex, message.indexOf(';', yIndex));
 
           // Create a formatted string for the STM32: "x;y"
           targetLocation = xValue + ";" + yValue;
           Serial.println("TARGET_UPDATE " + targetLocation);
           state = LOCATION_REQUEST;
           sentRequest = false;
+
         } else if (message.startsWith("STOP_MOVEMENT")) {
+          //Serial.println("Received STOP_MOVEMENT, listening for further commands");
           state = END;
           Serial.println("STOP");
         } else if (message.startsWith("REGISTER")) {
@@ -225,41 +228,6 @@ void handleState(RobotState& state) {
         }
       }
       break;*/
-
-    case PATH_REQUEST:
-      if (client.connected() && (robotID != "")) {
-        messageToSend = "REQUEST_PATH_UPDATE " + robotID;
-        sendTCP(messageToSend);
-      } else {
-        state = CONNECTING;
-      }
-
-      if (client.connected() && client.available() > 0) {
-        String message = client.readStringUntil('\n');
-        if (message.startsWith("PATH_UPDATE") && message.endsWith(robotID)) {  // "PATH_UPDATE x:x0_next:x1_next:xn_next;y:y0_next:y1_next:yn_next;amount_coordinates robotID"
-          // Extract x, y values
-          int xIndex = message.indexOf("x:") + 2;
-          int yIndex = message.indexOf("y:") + 2;
-          int amountIndex = message.indexOf(';', yIndex) + 1;  // After the y values
-
-          String xValues = message.substring(xIndex, message.indexOf(';', xIndex));
-          String yValues = message.substring(yIndex, message.indexOf(';', yIndex));
-          String amountCoordinates = message.substring(amountIndex, message.indexOf(' ', amountIndex));
-
-          // Create a formatted string for the STM32: "x;y;amount"
-          pathLocations = xValues + ";" + yValues + ";" + amountCoordinates;
-          Serial.println("PATH_UPDATE " + pathLocations);
-          state = LOCATION_REQUEST;
-          sentRequest = false;
-        } else if (message.startsWith("STOP_MOVEMENT")) {
-          state = END;
-          Serial.println("STOP");
-        } else if (message.startsWith("REGISTER")) {
-          robotID = "";
-          state = CONNECTING;
-        }
-      }
-      break;
 
     case END:
       if (client.connected() && client.available() > 0) {
