@@ -191,7 +191,42 @@ void handleState(RobotState& state) {
       }
       break;
 
-    /*case TARGET_REQUEST:
+    case PATH_REQUEST:
+      if (client.connected() && (robotID != "")) {
+        messageToSend = "REQUEST_PATH_UPDATE " + robotID;
+        sendTCP(messageToSend);
+      } else {
+        state = CONNECTING;
+      }
+
+      if (client.connected() && client.available() > 0) {
+        String message = client.readStringUntil('\n');
+        if (message.startsWith("PATH_UPDATE") && message.endsWith(robotID)) {  // "PATH_UPDATE x:x0_next:x1_next:xn_next;y:y0_next:y1_next:yn_next;amount_coordinates robotID"
+          // Extract x, y values
+          int xIndex = message.indexOf("x:") + 2;
+          int yIndex = message.indexOf("y:") + 2;
+          int amountIndex = message.indexOf(';', yIndex) + 1;  // After the y values
+
+          String xValues = message.substring(xIndex, message.indexOf(';', xIndex));
+          String yValues = message.substring(yIndex, message.indexOf(';', yIndex));
+          String amountCoordinates = message.substring(amountIndex, message.indexOf(' ', amountIndex));
+
+          // Create a formatted string for the STM32: "x;y;amount"
+          pathLocations = xValues + ";" + yValues + ";" + amountCoordinates;
+          Serial.println("PATH_UPDATE " + pathLocations);
+          state = LOCATION_REQUEST;
+          sentRequest = false;
+        } else if (message.startsWith("STOP_MOVEMENT")) {
+          state = END;
+          Serial.println("STOP");
+        } else if (message.startsWith("REGISTER")) {
+          robotID = "";
+          state = CONNECTING;
+        }
+      }
+      break;
+
+      /*case TARGET_REQUEST:
       if (client.connected() && (robotID != "")) {
         messageToSend = "REQUEST_TARGET_UPDATE " + robotID;
         sendTCP(messageToSend);
