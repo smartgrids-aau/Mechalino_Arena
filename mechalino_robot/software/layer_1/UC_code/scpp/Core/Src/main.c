@@ -51,6 +51,8 @@ typedef struct {
 	float kp;
 	float ki;
 	float kd;
+	float integral_limit;
+	float output_limit;
 } PIDController;
 
 /* USER CODE END PTD */
@@ -64,20 +66,28 @@ typedef struct {
 #define SERVO_STOP 3000
 #define FORWARD_MAX 5100 	// Maximum forward speed
 #define FORWARD_SLOW 3250 	// Minimum forward speed
+/* Base Speeds for Each Motor */
+#define BASE_SPEED_FORWARD 4175    // Base PWM for forward speed
+#define BASE_SPEED_BACKWARD 1800   // Base PWM for backward speed
+/* Maximum Correction Value */
+#define MAX_CORRECTION 900      // Maximum correction value for pid
 
 /* Thresholds and PID Gains */
 #define ANGLE_THRESHOLD_ROTATE_TO_MOVE  3.0f  	// Degrees
-#define ANGLE_THRESHOLD_MOVE_TO_ROTATE 25.0f  	// Degrees
+#define ANGLE_THRESHOLD_MOVE_TO_ROTATE 40.0f  	// Degrees
 #define DISTANCE_THRESHOLD_MOVE_TO_STOP 0.08f  	// Stop moving when within this distance
 #define DISTANCE_THRESHOLD_STOP_TO_MOVE 0.11f	// Start moving again when beyond this distance
 
-#define KP_ROTATION 1.5f 	// Proportional gain for rotation
+#define KP_ROTATION 10.0f 	// Proportional gain for rotation
 #define KI_ROTATION 0.0f 	// Integral gain for rotation
-#define KD_ROTATION 0.1f 	// Derivative gain for rotation
+#define KD_ROTATION 3.0f 	// Derivative gain for rotation
 
-#define KP_MOVEMENT 1.0f	// Proportional gain for movement
-#define KI_MOVEMENT 0.0f	// Integral gain for movement
-#define KD_MOVEMENT 0.05f	// Derivative gain for movement
+/* Maximum Integral Term */
+#define MAX_INTEGRAL 1000.0f   // Limit for integral term
+
+#define KP_MOVEMENT 15.0f	// Proportional gain for movement
+#define KI_MOVEMENT 0.2f	// Integral gain for movement
+#define KD_MOVEMENT 3.0f	// Derivative gain for movement
 
 #define MAX_COORDS 100		// Maximum number of coordinates in path
 /* USER CODE END PD */
@@ -95,10 +105,12 @@ Servo servo_right = { &htim2, TIM_CHANNEL_3, SERVO_STOP };
 
 volatile RobotState current_state = IDLE;
 
-PIDController rotation_pid =
-		{ 0.0f, 0.0f, KP_ROTATION, KI_ROTATION, KD_ROTATION }; // Tuning for rotation
-PIDController movement_pid =
-		{ 0.0f, 0.0f, KP_MOVEMENT, KI_MOVEMENT, KD_MOVEMENT }; // Tuning for movement
+PIDController rotation_pid = { .integral = 0.0f, .previous_error = 0.0f, .kp =
+KP_ROTATION, .ki = KI_ROTATION, .kd = KD_ROTATION, .integral_limit =
+MAX_INTEGRAL, .output_limit = MAX_CORRECTION }; // Tuning for rotation
+PIDController movement_pid = { .integral = 0.0f, .previous_error = 0.0f, .kp =
+KP_MOVEMENT, .ki = KI_MOVEMENT, .kd = KD_MOVEMENT, .integral_limit =
+MAX_INTEGRAL, .output_limit = MAX_CORRECTION }; // Tuning for movement
 
 char rx_buffer[256];
 uint8_t rx_index = 0;
@@ -115,6 +127,12 @@ float xCoords[MAX_COORDS];
 float yCoords[MAX_COORDS];
 int totalCoords = 0;
 int currentTargetIndex = 0;
+
+float angle_error = 0.0f;
+float calculated_correction = 0.0f;
+float target_distance = 0.0f;
+
+uint32_t last_status_send_time = 0;
 
 int path_set = 0;  // Flag to indicate if a target has been set
 /* USER CODE END PV */
@@ -165,11 +183,25 @@ void HAL_UART_RxCpltCallback(UART_HandleTypeDef *huart) {
 float pid_controller(PIDController *pid, float setpoint, float measured_value) {
 	float error = setpoint - measured_value;
 	pid->integral += error;
+
+	// Anti-windup: Limit the integral term
+	if (pid->integral > pid->integral_limit)
+		pid->integral = pid->integral_limit;
+	if (pid->integral < -pid->integral_limit)
+		pid->integral = -pid->integral_limit;
+
 	float derivative = error - pid->previous_error;
 	pid->previous_error = error;
 
 	float output = pid->kp * error + pid->ki * pid->integral
 			+ pid->kd * derivative;
+
+	// Limit the output to the maximum correction factor
+	if (output > pid->output_limit)
+		output = pid->output_limit;
+	if (output < -pid->output_limit)
+		output = -pid->output_limit;
+
 	return output;
 }
 
@@ -179,7 +211,7 @@ float pid_controller(PIDController *pid, float setpoint, float measured_value) {
 void handle_rotation() {
 	float target_angle = calculate_angle(current_x, current_y, target_x,
 			target_y);
-	float angle_error = target_angle - current_yaw;
+	angle_error = target_angle - current_yaw;
 
 	// Normalize the angle error to always choose the shortest rotation path
 	if (angle_error > 180) {
@@ -189,19 +221,18 @@ void handle_rotation() {
 	}
 
 	if (fabsf(angle_error) > ANGLE_THRESHOLD_ROTATE_TO_MOVE) {
-		// PID-based correction for rotation
-		float rotation_correction = pid_controller(&rotation_pid, 0.0f,
-				angle_error);
+		// Normalize the angle error for rotation
+		float normalized_angle_error = angle_error / 180.0f;
 
-		uint32_t pwm_adjustment = (uint32_t) (fabsf(rotation_correction));
+		// PID-based correction for rotation
+		calculated_correction = pid_controller(&rotation_pid, 0.0f,
+				normalized_angle_error);
+
 		uint32_t left_right_pwm;
 
 		if (angle_error > 0) {
-			if (pwm_adjustment > (FORWARD_MAX - FORWARD_SLOW)) {
-				pwm_adjustment = FORWARD_MAX - FORWARD_SLOW;
-			}
 			// Rotate right: Both motors move forward speed
-			left_right_pwm = FORWARD_SLOW + pwm_adjustment;
+			left_right_pwm = FORWARD_SLOW + calculated_correction;
 
 			// Ensure PWM values are within valid ranges
 			if (left_right_pwm > FORWARD_MAX)
@@ -209,11 +240,8 @@ void handle_rotation() {
 			if (left_right_pwm < FORWARD_SLOW)
 				left_right_pwm = FORWARD_SLOW;
 		} else {
-			if (pwm_adjustment > (BACKWARD_MAX - BACKWARD_SLOW)) {
-				pwm_adjustment = BACKWARD_MAX - BACKWARD_SLOW;
-			}
 			// Rotate left: Both motors move backward speed
-			left_right_pwm = BACKWARD_SLOW - pwm_adjustment;
+			left_right_pwm = BACKWARD_SLOW - calculated_correction;
 
 			// Ensure PWM values are within valid ranges
 			if (left_right_pwm < BACKWARD_MAX)
@@ -221,6 +249,8 @@ void handle_rotation() {
 			if (left_right_pwm > BACKWARD_SLOW)
 				left_right_pwm = BACKWARD_SLOW;
 		}
+
+		angle_error = 0.0f; // reset angle error for better performance monitoring over udp as only handle_movement angle_error should be captured
 
 		set_servo_pwm(&servo_left, left_right_pwm);
 		set_servo_pwm(&servo_right, left_right_pwm);
@@ -236,11 +266,11 @@ void handle_rotation() {
  * @brief Handle the movement of the robot towards the target position.
  */
 void handle_movement() {
-	float distance = distance_to_target(current_x, current_y, target_x,
+	target_distance = distance_to_target(current_x, current_y, target_x,
 			target_y);
 	float target_angle = calculate_angle(current_x, current_y, target_x,
 			target_y);
-	float angle_error = target_angle - current_yaw;
+	angle_error = target_angle - current_yaw;
 
 	// Normalize the angle error to [-180, 180]
 	if (angle_error > 180.0f) {
@@ -249,33 +279,43 @@ void handle_movement() {
 		angle_error += 360.0f;
 	}
 
-	if (distance > DISTANCE_THRESHOLD_MOVE_TO_STOP) {
+	if (target_distance > DISTANCE_THRESHOLD_MOVE_TO_STOP) {
 		if (fabsf(angle_error) > ANGLE_THRESHOLD_MOVE_TO_ROTATE) {
+			// If the angle error is too large, switch to rotating state
 			set_servo_pwm(&servo_left, SERVO_STOP);
 			set_servo_pwm(&servo_right, SERVO_STOP);
 			current_state = ROTATING;
 			return;
 		}
 
+		// Normalize the angle error
+		float normalized_angle_error = angle_error
+				/ ANGLE_THRESHOLD_MOVE_TO_ROTATE;
+
 		// PID-based correction for forward movement
-		float movement_correction = pid_controller(&movement_pid, 0.0f,
-				angle_error);
+		calculated_correction = pid_controller(&movement_pid, 0.0f,
+				normalized_angle_error);
 
-		int32_t pwm_adjustment = (int32_t) (fabsf(movement_correction));
+		// Base speeds for both motors
+		uint32_t left_pwm = BASE_SPEED_FORWARD;
+		uint32_t right_pwm = BASE_SPEED_BACKWARD;
 
-		if (pwm_adjustment > (FORWARD_MAX - FORWARD_SLOW)) {
-			pwm_adjustment = FORWARD_MAX - FORWARD_SLOW;
-		}
+		// Limit the correction to prevent excessive adjustments
+		if (calculated_correction > MAX_CORRECTION)
+			calculated_correction = MAX_CORRECTION;
+		if (calculated_correction < -MAX_CORRECTION)
+			calculated_correction = -MAX_CORRECTION;
 
-		// Move forward with one motor forward, one backward
-		uint32_t left_pwm = FORWARD_SLOW + pwm_adjustment; // Left motor forward
-		uint32_t right_pwm = BACKWARD_SLOW - pwm_adjustment; // Right motor backward
+		// Adjust PWM values based on the correction
+		left_pwm += (int32_t) (calculated_correction); // Left motor PWM increases with speed
+		right_pwm -= (int32_t) (calculated_correction); // Right motor PWM decreases with speed
 
 		// Ensure PWM values are within valid ranges
 		if (left_pwm > FORWARD_MAX)
 			left_pwm = FORWARD_MAX;
 		if (left_pwm < FORWARD_SLOW)
 			left_pwm = FORWARD_SLOW;
+
 		if (right_pwm < BACKWARD_MAX)
 			right_pwm = BACKWARD_MAX;
 		if (right_pwm > BACKWARD_SLOW)
@@ -289,7 +329,7 @@ void handle_movement() {
 		set_servo_pwm(&servo_right, SERVO_STOP);
 
 		// Hysteresis for distance threshold
-		if (distance < DISTANCE_THRESHOLD_STOP_TO_MOVE) {
+		if (target_distance < DISTANCE_THRESHOLD_STOP_TO_MOVE) {
 			currentTargetIndex++;
 			if (currentTargetIndex < totalCoords) {
 				target_x = xCoords[currentTargetIndex];
@@ -425,10 +465,12 @@ void execute_command(const char *cmd) {
 			return;
 		}
 
-		path_set = 1; // Set the target flag
+		path_set = 1; 				// Set the target flag
 		currentTargetIndex = 0;
-		current_state = ROTATING;  // Start with rotating to face the target
+		current_state = ROTATING;  	// Start with rotating to face the target
 	}
+
+	//send_status_to_esp();
 }
 
 /**
@@ -445,54 +487,70 @@ void set_servo_pwm(Servo *servo, uint32_t pulse) {
  * @brief Send the robot's status to ESP8266.
  */
 void send_status_to_esp() {
-	// Construct a status message to send to ESP8266
+	// Increase buffer size to accommodate arrays
 	char status_message[256];
-	snprintf(status_message, sizeof(status_message),
-			"STATE:%d;TARGET_X:%f;TARGET_Y:%f;CURRENT_X:%f;CURRENT_Y:%f;MOTOR_L:%lu;MOTOR_R:%lu\n",
-			current_state, target_x, target_y, current_x, current_y,
-			(unsigned long) servo_left.current_pwm,
-			(unsigned long) servo_right.current_pwm);
 
+	// Append basic status information
+	int len =
+			snprintf(status_message, sizeof(status_message),
+					"STATE:%d;CURRENT_TARGET_INDEX:%d;MOTOR_L:%lu;MOTOR_R:%lu;ANGLE_ERROR:%.4f;CALCULATED_PID:%.4f;TARGET_DISTANCE:%.4f\n",
+					current_state, currentTargetIndex,
+					(unsigned long) servo_left.current_pwm,
+					(unsigned long) servo_right.current_pwm, angle_error,
+					calculated_correction, target_distance);
+
+	// Ensure null-termination
+	status_message[sizeof(status_message) - 1] = '\0';
+
+	// Check for truncation
+	if (len >= sizeof(status_message)) {
+		// Handle the error: truncate, log, etc.
+        char error_message[] = "ERROR: Status message truncated.\n";
+		HAL_UART_Transmit(&huart1, (uint8_t*) error_message,
+				strlen(error_message), HAL_MAX_DELAY);
+	}
+
+	// Transmit the status message over UART
 	HAL_UART_Transmit(&huart1, (uint8_t*) status_message,
 			strlen(status_message), HAL_MAX_DELAY);
 }
-
 /* USER CODE END 0 */
 
 /**
- * @brief  The application entry point.
- * @retval int
- */
-int main(void) {
+  * @brief  The application entry point.
+  * @retval int
+  */
+int main(void)
+{
 
-	/* USER CODE BEGIN 1 */
+  /* USER CODE BEGIN 1 */
 
-	/* USER CODE END 1 */
+  /* USER CODE END 1 */
 
-	/* MCU Configuration--------------------------------------------------------*/
+  /* MCU Configuration--------------------------------------------------------*/
 
-	/* Reset of all peripherals, Initializes the Flash interface and the Systick. */
-	HAL_Init();
+  /* Reset of all peripherals, Initializes the Flash interface and the Systick. */
+  HAL_Init();
 
-	/* USER CODE BEGIN Init */
+  /* USER CODE BEGIN Init */
 
-	/* USER CODE END Init */
+  /* USER CODE END Init */
 
-	/* Configure the system clock */
-	SystemClock_Config();
+  /* Configure the system clock */
+  SystemClock_Config();
 
-	/* USER CODE BEGIN SysInit */
+  /* USER CODE BEGIN SysInit */
 
-	/* USER CODE END SysInit */
+  /* USER CODE END SysInit */
 
-	/* Initialize all configured peripherals */
-	MX_GPIO_Init();
-	MX_TIM1_Init();
-	MX_TIM2_Init();
-	MX_USART1_UART_Init();
-	MX_I2C1_Init();
-	MX_ADC1_Init();
-	/* USER CODE BEGIN 2 */
+  /* Initialize all configured peripherals */
+  MX_GPIO_Init();
+  MX_TIM1_Init();
+  MX_TIM2_Init();
+  MX_USART1_UART_Init();
+  MX_I2C1_Init();
+  MX_ADC1_Init();
+  /* USER CODE BEGIN 2 */
 
 	HAL_GPIO_WritePin(GPIOC, GPIO_PIN_13, GPIO_PIN_SET);
 	HAL_Delay(2000);
@@ -519,10 +577,10 @@ int main(void) {
 	HAL_UART_Receive_IT(&huart1, UART1_rxBuffer, sizeof(UART1_rxBuffer)); // interrupt based
 
 	HAL_GPIO_WritePin(GPIOC, GPIO_PIN_13, GPIO_PIN_RESET);
-	/* USER CODE END 2 */
+  /* USER CODE END 2 */
 
-	/* Infinite loop */
-	/* USER CODE BEGIN WHILE */
+  /* Infinite loop */
+  /* USER CODE BEGIN WHILE */
 	while (1) {
 		if (rx_complete) {
 			execute_command(rx_buffer); // Process the command
@@ -542,62 +600,69 @@ int main(void) {
 		default:
 		}
 
-		// Send status to ESP8266 for UDP transmission
-		//send_status_to_esp();
+		// Send status to ESP8266 every 500ms
+		uint32_t current_time = HAL_GetTick();
+		if (current_time - last_status_send_time >= 500) {
+			last_status_send_time = current_time;
+			send_status_to_esp();
+		}
 
-		//HAL_Delay(10);
+		HAL_Delay(10);
 
-		/* USER CODE END WHILE */
+    /* USER CODE END WHILE */
 
-		/* USER CODE BEGIN 3 */
+    /* USER CODE BEGIN 3 */
 	}
-	/* USER CODE END 3 */
+  /* USER CODE END 3 */
 }
 
 /**
- * @brief System Clock Configuration
- * @retval None
- */
-void SystemClock_Config(void) {
-	RCC_OscInitTypeDef RCC_OscInitStruct = { 0 };
-	RCC_ClkInitTypeDef RCC_ClkInitStruct = { 0 };
+  * @brief System Clock Configuration
+  * @retval None
+  */
+void SystemClock_Config(void)
+{
+  RCC_OscInitTypeDef RCC_OscInitStruct = {0};
+  RCC_ClkInitTypeDef RCC_ClkInitStruct = {0};
 
-	/** Configure the main internal regulator output voltage
-	 */
-	__HAL_RCC_PWR_CLK_ENABLE();
-	__HAL_PWR_VOLTAGESCALING_CONFIG(PWR_REGULATOR_VOLTAGE_SCALE2);
+  /** Configure the main internal regulator output voltage
+  */
+  __HAL_RCC_PWR_CLK_ENABLE();
+  __HAL_PWR_VOLTAGESCALING_CONFIG(PWR_REGULATOR_VOLTAGE_SCALE2);
 
-	/** Initializes the RCC Oscillators according to the specified parameters
-	 * in the RCC_OscInitTypeDef structure.
-	 */
-	RCC_OscInitStruct.OscillatorType = RCC_OSCILLATORTYPE_HSE;
-	RCC_OscInitStruct.HSEState = RCC_HSE_ON;
-	RCC_OscInitStruct.PLL.PLLState = RCC_PLL_ON;
-	RCC_OscInitStruct.PLL.PLLSource = RCC_PLLSOURCE_HSE;
-	RCC_OscInitStruct.PLL.PLLM = 20;
-	RCC_OscInitStruct.PLL.PLLN = 128;
-	RCC_OscInitStruct.PLL.PLLP = RCC_PLLP_DIV2;
-	RCC_OscInitStruct.PLL.PLLQ = 4;
-	if (HAL_RCC_OscConfig(&RCC_OscInitStruct) != HAL_OK) {
-		Error_Handler();
-	}
+  /** Initializes the RCC Oscillators according to the specified parameters
+  * in the RCC_OscInitTypeDef structure.
+  */
+  RCC_OscInitStruct.OscillatorType = RCC_OSCILLATORTYPE_HSE;
+  RCC_OscInitStruct.HSEState = RCC_HSE_ON;
+  RCC_OscInitStruct.PLL.PLLState = RCC_PLL_ON;
+  RCC_OscInitStruct.PLL.PLLSource = RCC_PLLSOURCE_HSE;
+  RCC_OscInitStruct.PLL.PLLM = 20;
+  RCC_OscInitStruct.PLL.PLLN = 128;
+  RCC_OscInitStruct.PLL.PLLP = RCC_PLLP_DIV2;
+  RCC_OscInitStruct.PLL.PLLQ = 4;
+  if (HAL_RCC_OscConfig(&RCC_OscInitStruct) != HAL_OK)
+  {
+    Error_Handler();
+  }
 
-	/** Initializes the CPU, AHB and APB buses clocks
-	 */
-	RCC_ClkInitStruct.ClockType = RCC_CLOCKTYPE_HCLK | RCC_CLOCKTYPE_SYSCLK
-			| RCC_CLOCKTYPE_PCLK1 | RCC_CLOCKTYPE_PCLK2;
-	RCC_ClkInitStruct.SYSCLKSource = RCC_SYSCLKSOURCE_PLLCLK;
-	RCC_ClkInitStruct.AHBCLKDivider = RCC_SYSCLK_DIV1;
-	RCC_ClkInitStruct.APB1CLKDivider = RCC_HCLK_DIV2;
-	RCC_ClkInitStruct.APB2CLKDivider = RCC_HCLK_DIV1;
+  /** Initializes the CPU, AHB and APB buses clocks
+  */
+  RCC_ClkInitStruct.ClockType = RCC_CLOCKTYPE_HCLK|RCC_CLOCKTYPE_SYSCLK
+                              |RCC_CLOCKTYPE_PCLK1|RCC_CLOCKTYPE_PCLK2;
+  RCC_ClkInitStruct.SYSCLKSource = RCC_SYSCLKSOURCE_PLLCLK;
+  RCC_ClkInitStruct.AHBCLKDivider = RCC_SYSCLK_DIV1;
+  RCC_ClkInitStruct.APB1CLKDivider = RCC_HCLK_DIV2;
+  RCC_ClkInitStruct.APB2CLKDivider = RCC_HCLK_DIV1;
 
-	if (HAL_RCC_ClockConfig(&RCC_ClkInitStruct, FLASH_LATENCY_2) != HAL_OK) {
-		Error_Handler();
-	}
+  if (HAL_RCC_ClockConfig(&RCC_ClkInitStruct, FLASH_LATENCY_2) != HAL_OK)
+  {
+    Error_Handler();
+  }
 
-	/** Enables the Clock Security System
-	 */
-	HAL_RCC_EnableCSS();
+  /** Enables the Clock Security System
+  */
+  HAL_RCC_EnableCSS();
 }
 
 /* USER CODE BEGIN 4 */
@@ -605,16 +670,17 @@ void SystemClock_Config(void) {
 /* USER CODE END 4 */
 
 /**
- * @brief  This function is executed in case of error occurrence.
- * @retval None
- */
-void Error_Handler(void) {
-	/* USER CODE BEGIN Error_Handler_Debug */
+  * @brief  This function is executed in case of error occurrence.
+  * @retval None
+  */
+void Error_Handler(void)
+{
+  /* USER CODE BEGIN Error_Handler_Debug */
 	/* User can add his own implementation to report the HAL error return state */
 	__disable_irq();
 	while (1) {
 	}
-	/* USER CODE END Error_Handler_Debug */
+  /* USER CODE END Error_Handler_Debug */
 }
 
 #ifdef  USE_FULL_ASSERT
