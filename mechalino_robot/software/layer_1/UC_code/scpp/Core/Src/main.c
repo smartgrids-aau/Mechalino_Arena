@@ -74,7 +74,7 @@ typedef struct {
 
 /* Thresholds and PID Gains */
 #define ANGLE_THRESHOLD_ROTATE_TO_MOVE  3.0f  	// Degrees
-#define ANGLE_THRESHOLD_MOVE_TO_ROTATE 40.0f  	// Degrees
+#define ANGLE_THRESHOLD_MOVE_TO_ROTATE 30.0f  	// Degrees
 #define DISTANCE_THRESHOLD_MOVE_TO_STOP 0.08f  	// Stop moving when within this distance
 #define DISTANCE_THRESHOLD_STOP_TO_MOVE 0.11f	// Start moving again when beyond this distance
 
@@ -90,6 +90,8 @@ typedef struct {
 #define KD_MOVEMENT 3.0f	// Derivative gain for movement
 
 #define MAX_COORDS 100		// Maximum number of coordinates in path
+
+#define SERIAL_SEND_INTERVAL 1000	// Interval in ms to send data over serial
 /* USER CODE END PD */
 
 /* Private macro -------------------------------------------------------------*/
@@ -135,6 +137,7 @@ float target_distance = 0.0f;
 uint32_t last_status_send_time = 0;
 
 int path_set = 0;  // Flag to indicate if a target has been set
+int locationReceived = 0;
 /* USER CODE END PV */
 
 /* Private function prototypes -----------------------------------------------*/
@@ -232,7 +235,7 @@ void handle_rotation() {
 
 		if (angle_error > 0) {
 			// Rotate right: Both motors move forward speed
-			left_right_pwm = FORWARD_SLOW + calculated_correction;
+			left_right_pwm = FORWARD_SLOW;
 
 			// Ensure PWM values are within valid ranges
 			if (left_right_pwm > FORWARD_MAX)
@@ -241,7 +244,7 @@ void handle_rotation() {
 				left_right_pwm = FORWARD_SLOW;
 		} else {
 			// Rotate left: Both motors move backward speed
-			left_right_pwm = BACKWARD_SLOW - calculated_correction;
+			left_right_pwm = BACKWARD_SLOW;
 
 			// Ensure PWM values are within valid ranges
 			if (left_right_pwm < BACKWARD_MAX)
@@ -328,13 +331,21 @@ void handle_movement() {
 		set_servo_pwm(&servo_left, SERVO_STOP);
 		set_servo_pwm(&servo_right, SERVO_STOP);
 
+		current_state = ROTATING;
+
 		// Hysteresis for distance threshold
 		if (target_distance < DISTANCE_THRESHOLD_STOP_TO_MOVE) {
 			currentTargetIndex++;
 			if (currentTargetIndex < totalCoords) {
 				target_x = xCoords[currentTargetIndex];
 				target_y = yCoords[currentTargetIndex];
-				current_state = ROTATING;
+				float target_angle = calculate_angle(current_x, current_y,
+						target_x, target_y);
+				angle_error = target_angle - current_yaw;
+				if (fabsf(angle_error) < ANGLE_THRESHOLD_MOVE_TO_ROTATE) {
+					current_state = MOVING;
+					return;
+				}
 			} else {
 				current_state = IDLE;
 				path_set = 0;
@@ -402,7 +413,6 @@ void execute_command(const char *cmd) {
 	if (strncmp(cmd, "STOP", 4) == 0) {
 		set_servo_pwm(&servo_left, SERVO_STOP);
 		set_servo_pwm(&servo_right, SERVO_STOP);
-		path_set = 0; 								// Set the path flag
 		current_state = IDLE;
 	} else if (strncmp(cmd, "START_SPINNING", 14) == 0) {
 		set_servo_pwm(&servo_left, FORWARD_MAX);
@@ -411,7 +421,7 @@ void execute_command(const char *cmd) {
 		current_state = SPINNING;
 	} else if (strncmp(cmd, "LOCATION_UPDATE", 15) == 0) {
 		sscanf(cmd + 16, "%f;%f;%f", &current_x, &current_y, &current_yaw);
-
+		locationReceived = 1;
 		if (path_set && current_state == IDLE) {
 			target_x = xCoords[currentTargetIndex];
 			target_y = yCoords[currentTargetIndex];
@@ -470,7 +480,12 @@ void execute_command(const char *cmd) {
 		current_state = ROTATING;  	// Start with rotating to face the target
 	}
 
-	//send_status_to_esp();
+	// Send status to ESP8266 every 500ms
+	uint32_t current_time = HAL_GetTick();
+	if (current_time - last_status_send_time >= SERIAL_SEND_INTERVAL) {
+		last_status_send_time = current_time;
+		send_status_to_esp();
+	}
 }
 
 /**
@@ -505,7 +520,7 @@ void send_status_to_esp() {
 	// Check for truncation
 	if (len >= sizeof(status_message)) {
 		// Handle the error: truncate, log, etc.
-        char error_message[] = "ERROR: Status message truncated.\n";
+		char error_message[] = "ERROR: Status message truncated.\n";
 		HAL_UART_Transmit(&huart1, (uint8_t*) error_message,
 				strlen(error_message), HAL_MAX_DELAY);
 	}
@@ -517,40 +532,39 @@ void send_status_to_esp() {
 /* USER CODE END 0 */
 
 /**
-  * @brief  The application entry point.
-  * @retval int
-  */
-int main(void)
-{
+ * @brief  The application entry point.
+ * @retval int
+ */
+int main(void) {
 
-  /* USER CODE BEGIN 1 */
+	/* USER CODE BEGIN 1 */
 
-  /* USER CODE END 1 */
+	/* USER CODE END 1 */
 
-  /* MCU Configuration--------------------------------------------------------*/
+	/* MCU Configuration--------------------------------------------------------*/
 
-  /* Reset of all peripherals, Initializes the Flash interface and the Systick. */
-  HAL_Init();
+	/* Reset of all peripherals, Initializes the Flash interface and the Systick. */
+	HAL_Init();
 
-  /* USER CODE BEGIN Init */
+	/* USER CODE BEGIN Init */
 
-  /* USER CODE END Init */
+	/* USER CODE END Init */
 
-  /* Configure the system clock */
-  SystemClock_Config();
+	/* Configure the system clock */
+	SystemClock_Config();
 
-  /* USER CODE BEGIN SysInit */
+	/* USER CODE BEGIN SysInit */
 
-  /* USER CODE END SysInit */
+	/* USER CODE END SysInit */
 
-  /* Initialize all configured peripherals */
-  MX_GPIO_Init();
-  MX_TIM1_Init();
-  MX_TIM2_Init();
-  MX_USART1_UART_Init();
-  MX_I2C1_Init();
-  MX_ADC1_Init();
-  /* USER CODE BEGIN 2 */
+	/* Initialize all configured peripherals */
+	MX_GPIO_Init();
+	MX_TIM1_Init();
+	MX_TIM2_Init();
+	MX_USART1_UART_Init();
+	MX_I2C1_Init();
+	MX_ADC1_Init();
+	/* USER CODE BEGIN 2 */
 
 	HAL_GPIO_WritePin(GPIOC, GPIO_PIN_13, GPIO_PIN_SET);
 	HAL_Delay(2000);
@@ -577,10 +591,10 @@ int main(void)
 	HAL_UART_Receive_IT(&huart1, UART1_rxBuffer, sizeof(UART1_rxBuffer)); // interrupt based
 
 	HAL_GPIO_WritePin(GPIOC, GPIO_PIN_13, GPIO_PIN_RESET);
-  /* USER CODE END 2 */
+	/* USER CODE END 2 */
 
-  /* Infinite loop */
-  /* USER CODE BEGIN WHILE */
+	/* Infinite loop */
+	/* USER CODE BEGIN WHILE */
 	while (1) {
 		if (rx_complete) {
 			execute_command(rx_buffer); // Process the command
@@ -588,81 +602,78 @@ int main(void)
 		}
 		switch (current_state) {
 		case ROTATING:
-			handle_rotation();
+			if (locationReceived) {
+				handle_rotation();
+				locationReceived = 0;
+			}
 			break;
 		case MOVING:
-			handle_movement();
+			if (locationReceived) {
+				handle_movement();
+				locationReceived = 0;
+			}
 			break;
 		case SPINNING:
 			// Spinning is already handled in execute_command
 			break;
 		case IDLE:
+			break;
 		default:
-		}
-
-		// Send status to ESP8266 every 500ms
-		uint32_t current_time = HAL_GetTick();
-		if (current_time - last_status_send_time >= 500) {
-			last_status_send_time = current_time;
-			send_status_to_esp();
 		}
 
 		HAL_Delay(10);
 
-    /* USER CODE END WHILE */
+		/* USER CODE END WHILE */
 
-    /* USER CODE BEGIN 3 */
+		/* USER CODE BEGIN 3 */
 	}
-  /* USER CODE END 3 */
+	/* USER CODE END 3 */
 }
 
 /**
-  * @brief System Clock Configuration
-  * @retval None
-  */
-void SystemClock_Config(void)
-{
-  RCC_OscInitTypeDef RCC_OscInitStruct = {0};
-  RCC_ClkInitTypeDef RCC_ClkInitStruct = {0};
+ * @brief System Clock Configuration
+ * @retval None
+ */
+void SystemClock_Config(void) {
+	RCC_OscInitTypeDef RCC_OscInitStruct = { 0 };
+	RCC_ClkInitTypeDef RCC_ClkInitStruct = { 0 };
 
-  /** Configure the main internal regulator output voltage
-  */
-  __HAL_RCC_PWR_CLK_ENABLE();
-  __HAL_PWR_VOLTAGESCALING_CONFIG(PWR_REGULATOR_VOLTAGE_SCALE2);
+	/** Configure the main internal regulator output voltage
+	 */
+	__HAL_RCC_PWR_CLK_ENABLE();
+	__HAL_PWR_VOLTAGESCALING_CONFIG(PWR_REGULATOR_VOLTAGE_SCALE2);
 
-  /** Initializes the RCC Oscillators according to the specified parameters
-  * in the RCC_OscInitTypeDef structure.
-  */
-  RCC_OscInitStruct.OscillatorType = RCC_OSCILLATORTYPE_HSE;
-  RCC_OscInitStruct.HSEState = RCC_HSE_ON;
-  RCC_OscInitStruct.PLL.PLLState = RCC_PLL_ON;
-  RCC_OscInitStruct.PLL.PLLSource = RCC_PLLSOURCE_HSE;
-  RCC_OscInitStruct.PLL.PLLM = 20;
-  RCC_OscInitStruct.PLL.PLLN = 128;
-  RCC_OscInitStruct.PLL.PLLP = RCC_PLLP_DIV2;
-  RCC_OscInitStruct.PLL.PLLQ = 4;
-  if (HAL_RCC_OscConfig(&RCC_OscInitStruct) != HAL_OK)
-  {
-    Error_Handler();
-  }
+	/** Initializes the RCC Oscillators according to the specified parameters
+	 * in the RCC_OscInitTypeDef structure.
+	 */
+	RCC_OscInitStruct.OscillatorType = RCC_OSCILLATORTYPE_HSE;
+	RCC_OscInitStruct.HSEState = RCC_HSE_ON;
+	RCC_OscInitStruct.PLL.PLLState = RCC_PLL_ON;
+	RCC_OscInitStruct.PLL.PLLSource = RCC_PLLSOURCE_HSE;
+	RCC_OscInitStruct.PLL.PLLM = 20;
+	RCC_OscInitStruct.PLL.PLLN = 128;
+	RCC_OscInitStruct.PLL.PLLP = RCC_PLLP_DIV2;
+	RCC_OscInitStruct.PLL.PLLQ = 4;
+	if (HAL_RCC_OscConfig(&RCC_OscInitStruct) != HAL_OK) {
+		Error_Handler();
+	}
 
-  /** Initializes the CPU, AHB and APB buses clocks
-  */
-  RCC_ClkInitStruct.ClockType = RCC_CLOCKTYPE_HCLK|RCC_CLOCKTYPE_SYSCLK
-                              |RCC_CLOCKTYPE_PCLK1|RCC_CLOCKTYPE_PCLK2;
-  RCC_ClkInitStruct.SYSCLKSource = RCC_SYSCLKSOURCE_PLLCLK;
-  RCC_ClkInitStruct.AHBCLKDivider = RCC_SYSCLK_DIV1;
-  RCC_ClkInitStruct.APB1CLKDivider = RCC_HCLK_DIV2;
-  RCC_ClkInitStruct.APB2CLKDivider = RCC_HCLK_DIV1;
+	/** Initializes the CPU, AHB and APB buses clocks
+	 */
+	RCC_ClkInitStruct.ClockType = RCC_CLOCKTYPE_HCLK | RCC_CLOCKTYPE_SYSCLK
+			| RCC_CLOCKTYPE_PCLK1 | RCC_CLOCKTYPE_PCLK2;
+	RCC_ClkInitStruct.SYSCLKSource = RCC_SYSCLKSOURCE_PLLCLK;
+	RCC_ClkInitStruct.AHBCLKDivider = RCC_SYSCLK_DIV1;
+	RCC_ClkInitStruct.APB1CLKDivider = RCC_HCLK_DIV2;
+	RCC_ClkInitStruct.APB2CLKDivider = RCC_HCLK_DIV1;
 
-  if (HAL_RCC_ClockConfig(&RCC_ClkInitStruct, FLASH_LATENCY_2) != HAL_OK)
-  {
-    Error_Handler();
-  }
+	if (HAL_RCC_ClockConfig(&RCC_ClkInitStruct, FLASH_LATENCY_2) != HAL_OK) {
+		Error_Handler();
+	}
 
-  /** Enables the Clock Security System
-  */
-  HAL_RCC_EnableCSS();
+	/** Enables the Clock Security System
+	 */
+	HAL_RCC_EnableCSS();
 }
 
 /* USER CODE BEGIN 4 */
@@ -670,17 +681,16 @@ void SystemClock_Config(void)
 /* USER CODE END 4 */
 
 /**
-  * @brief  This function is executed in case of error occurrence.
-  * @retval None
-  */
-void Error_Handler(void)
-{
-  /* USER CODE BEGIN Error_Handler_Debug */
+ * @brief  This function is executed in case of error occurrence.
+ * @retval None
+ */
+void Error_Handler(void) {
+	/* USER CODE BEGIN Error_Handler_Debug */
 	/* User can add his own implementation to report the HAL error return state */
 	__disable_irq();
 	while (1) {
 	}
-  /* USER CODE END Error_Handler_Debug */
+	/* USER CODE END Error_Handler_Debug */
 }
 
 #ifdef  USE_FULL_ASSERT
