@@ -1,131 +1,147 @@
 #!/usr/bin/env python3
-import numpy as np
-import rospy
-import cv2
-from sensor_msgs.msg import Image
-from cv_bridge import CvBridge
-import cv2.aruco as aruco
-import traceback
-import tf
-import tf.transformations as tf_transformations
-import tf.transformations as tf_trans
-from geometry_msgs.msg import TransformStamped
-import tf2_ros
-from std_msgs.msg import Float32MultiArray
+# This shebang line indicates that the script should be run with Python 3
 
-T_table_camera = None  # global access
+import numpy as np  # Import the NumPy library for array manipulation and numerical operations
+import rospy  # Import the ROS (Robot Operating System) Python client library
+import cv2  # Import OpenCV for computer vision tasks, such as image processing and ArUco marker detection
+from sensor_msgs.msg import Image  # Import ROS message type for images
+from cv_bridge import CvBridge  # Import CvBridge to convert between ROS Image messages and OpenCV images
+import cv2.aruco as aruco  # Import the ArUco marker detection module from OpenCV
+import traceback  # Import traceback to handle exceptions and print stack traces
+import tf  # Import tf for managing transformations between different coordinate frames in ROS
+import tf.transformations as tf_transformations  # Import utilities for transformation-related operations like quaternions and Euler angles
+import tf.transformations as tf_trans  # Alias for tf.transformations to simplify matrix operations
+from geometry_msgs.msg import TransformStamped  # Import ROS message type for broadcasting transformations
+import tf2_ros  # Import the ROS 2.0 version of the transform broadcasting library
+from std_msgs.msg import Float32MultiArray  # Import ROS message type for handling arrays of floating-point numbers
 
+# Global variable to store the transformation matrix between the table and the camera
+T_table_camera = None
+
+# Callback function that processes incoming camera images
 def image_callback(msg):
-    global cv_bridge
-    global aruco_marker_detector
-    global mechalino_ids, number_of_specified_robots
-    global camera_matrix, distortion_coeffs, objPoints
-    global broadcaster, pose_publishers
-    global T_table_camera
+    global cv_bridge  # Access the global CvBridge object to convert ROS images to OpenCV images
+    global aruco_marker_detector  # Access the global ArUco marker detector object
+    global mechalino_ids, number_of_specified_robots  # Access the list of robot IDs
+    global camera_matrix, distortion_coeffs, objPoints  # Access camera calibration parameters and 3D object points
+    global broadcaster, pose_publishers  # Access the global broadcaster and pose publishers for robots
+    global T_table_camera  # Access the global transformation matrix between the table and the camera
 
-    # Konvertiere das ROS-Bild in ein OpenCV-Bild
+    # Convert the ROS Image message into an OpenCV image (8-bit 3-channel)
     cv_image = cv_bridge.imgmsg_to_cv2(msg, desired_encoding="8UC3")
 
     try:
-        # Konvertiere das Bild zu Graustufen für die Marker-Erkennung
+        # Convert the image to grayscale for ArUco marker detection
         gray = cv2.cvtColor(cv_image, cv2.COLOR_BGR2GRAY)
 
-        # ARuco Marker erkennen
+        # Detect ArUco markers in the grayscale image
         markerCorners, markerIds, _ = aruco_marker_detector.detectMarkers(gray)
 
-        # Debug: Zeige die erkannten Marker-IDs an
-        rospy.loginfo(f"Erkannte Marker-IDs: {markerIds}")
+        # Log detected marker IDs for debugging
+        rospy.loginfo(f"Detected Marker IDs: {markerIds}")
 
+        # If no markers are detected, log a warning and return
         if markerIds is None:
             rospy.logwarn("No robot is being detected!")
             return
 
-        # Prüfe, welche Marker-IDs nicht erkannt wurden
+        # Check which Mechalino robot IDs are not detected
         for id in mechalino_ids:
             if id not in markerIds.flatten():
                 rospy.logwarn(f"Mechalino with id {id} is not detected!")
 
-        # Bearbeite die erkannten Marker
+        # Process each detected marker
         for i in range(len(markerIds)):
+            # Ignore any marker that is not in the list of valid Mechalino IDs
             if markerIds[i][0] not in mechalino_ids:
                 rospy.logwarn(f"Invalid robot id detected: {markerIds[i][0]}")
                 return
 
-            # Berechne die Pose des Markers (Rotation und Translation)
+            # Estimate the marker's pose (rotation vector and translation vector)
             retval, rvec, tvec = cv2.solvePnP(objPoints, markerCorners[i], camera_matrix, distortion_coeffs)
 
-            # Konvertiere den Rotationsvektor in eine Rotationsmatrix
+            # Convert the rotation vector (rvec) to a rotation matrix
             rotation_matrix, _ = cv2.Rodrigues(rvec)
 
-            # Extrahiere die Euler-Winkel aus der Rotationsmatrix
+            # Extract Euler angles from the rotation matrix
             euler_angles = cv2.RQDecomp3x3(rotation_matrix)[0]
 
-            # Konvertiere den Rotationsvektor in Quaternionen
+            # Convert the Euler angles to a quaternion for use in transformations
             quaternion = tf_transformations.quaternion_from_euler(
                 np.deg2rad(euler_angles[0]), np.deg2rad(euler_angles[1]), np.deg2rad(euler_angles[2]))
 
-            # Berechne die Transformation zwischen Roboter und Kamera
+            # Calculate the transformation matrix from the robot to the camera
             T_robot_camera = tf_trans.concatenate_matrices(
                 tf_trans.translation_matrix(tvec.reshape(3)),
                 tf_trans.quaternion_matrix(quaternion)
             )
 
-            # Berechne die Transformation zwischen Roboter und Tisch
+            # Calculate the transformation matrix from the robot to the table
             T_robot_table = tf_trans.concatenate_matrices(T_table_camera, T_robot_camera)
 
-            # Erstelle eine TransformStamped-Nachricht
+            # Create a TransformStamped message to broadcast the transformation
             transform_stamped = TransformStamped()
-            transform_stamped.header.stamp = rospy.Time.now()
-            transform_stamped.header.frame_id = "table"
-            transform_stamped.child_frame_id = f"mechalino_{markerIds[i][0]}"
+            transform_stamped.header.stamp = rospy.Time.now()  # Set the current timestamp
+            transform_stamped.header.frame_id = "table"  # The parent frame is the table
+            transform_stamped.child_frame_id = f"mechalino_{markerIds[i][0]}"  # The child frame is the robot ID
+
+            # Set the translation component of the transform (x, y, z coordinates)
             transform_stamped.transform.translation.x = T_robot_table[0, 3]
             transform_stamped.transform.translation.y = T_robot_table[1, 3]
             transform_stamped.transform.translation.z = T_robot_table[2, 3]
+
+            # Set the rotation component of the transform (as a quaternion)
             transform_stamped.transform.rotation.x = tf_trans.quaternion_from_matrix(T_robot_table)[0]
             transform_stamped.transform.rotation.y = tf_trans.quaternion_from_matrix(T_robot_table)[1]
             transform_stamped.transform.rotation.z = tf_trans.quaternion_from_matrix(T_robot_table)[2]
             transform_stamped.transform.rotation.w = tf_trans.quaternion_from_matrix(T_robot_table)[3]
 
-            # Sende die Transform-Nachricht
+            # Broadcast the transform using the tf2 broadcaster
             broadcaster.sendTransform(transform_stamped)
 
-            # Veröffentliche die Pose des Roboters zusammen mit seiner ID und dem Z-Winkel (Yaw)
+            # Publish the robot's pose (x, y, yaw) and ID
             pose_data = Float32MultiArray(data=[
-                T_robot_table[0, 3],   # x-Koordinate
-                T_robot_table[1, 3],   # y-Koordinate
-                euler_angles[2],       # z-Winkel (Yaw)
-                markerIds[i][0]        # ARuco-Marker-ID
+                T_robot_table[0, 3],   # x-coordinate of the robot
+                T_robot_table[1, 3],   # y-coordinate of the robot
+                euler_angles[2],       # z-angle (yaw) of the robot
+                markerIds[i][0]        # ID of the detected marker
             ])
-            robot_index = np.where(mechalino_ids == markerIds[i])[0][0]
-            pose_publishers[robot_index].publish(pose_data)
+            robot_index = np.where(mechalino_ids == markerIds[i])[0][0]  # Find the index of the robot ID
+            pose_publishers[robot_index].publish(pose_data)  # Publish the robot's pose
 
     except Exception as e:
+        # Log any exceptions that occur during marker detection or pose estimation
         rospy.logerr(f"Error detecting markers: {str(e)}")
         traceback.print_exc()
 
+# Main function: runs when the script is executed
 if __name__ == '__main__':
     try:
-        # Initialisiere den ROS-Node
+        # Initialize the ROS node for publishing robot transformations
         rospy.init_node('robots_publisher', anonymous=True)
 
-        # Warte auf das Transform zwischen Kamera und Tisch
-        rospy.loginfo("Mechalino publisher is Waiting for the table tf...")
+        # Wait for the transform between the camera and the table
+        rospy.loginfo("Mechalino publisher is waiting for the table tf...")
         tf_listener = tf.TransformListener()
         while not rospy.is_shutdown():
             try:
+                # Wait for the transform between the camera and the table to become available
                 tf_listener.waitForTransform("camera", "table", rospy.Time(), rospy.Duration(1.0))
                 break
             except Exception as e:
                 pass
+        # Get the translation and rotation between the table and the camera
         (trans_table_camera, rot_table_camera) = tf_listener.lookupTransform('table', 'camera', rospy.Time(0))
-        T_table_camera = tf_trans.concatenate_matrices(tf_trans.translation_matrix(trans_table_camera),
-                                                       tf_trans.quaternion_matrix(rot_table_camera))
-        rospy.loginfo("Table tf found! Publishing mechalino tfs ...")
+        T_table_camera = tf_trans.concatenate_matrices(
+            tf_trans.translation_matrix(trans_table_camera),
+            tf_trans.quaternion_matrix(rot_table_camera)
+        )
+        rospy.loginfo("Table tf found! Publishing Mechalino tfs...")
 
-        # Initialisiere den CvBridge
+        # Initialize the CvBridge object for ROS <-> OpenCV conversions
         cv_bridge = CvBridge()
 
-        # ARuco-Detektor initialisieren
+        # Initialize the ArUco detector with parameters from the ROS parameter server
         robots_dictionary = int(rospy.get_param('~robots_dictionary'))
         detectorParams = aruco.DetectorParameters()
 
@@ -143,23 +159,26 @@ if __name__ == '__main__':
         #detectorParams.maxErroneousBitsInBorderRate = 0.35 #0.35
         #detectorParams.errorCorrectionRate = 0.5 # 0.6
 
-        # Very important! These are important for pose estimation
-        detectorParams.cornerRefinementMethod = cv2.aruco.CORNER_REFINE_SUBPIX # CORNER_REFINE_NONE | CORNER_REFINE_SUBPIX | CORNER_REFINE_CONTOUR
-        # for subpix
-        detectorParams.cornerRefinementWinSize = 4 # 5
-        detectorParams.cornerRefinementMaxIterations = 200 # 30
-        detectorParams.cornerRefinementMinAccuracy = 0.05 # 0.1
+        
 
+        # Important parameters for pose estimation (refining the detected marker corners)
+        detectorParams.cornerRefinementMethod = cv2.aruco.CORNER_REFINE_SUBPIX # CORNER_REFINE_NONE | CORNER_REFINE_SUBPIX | CORNER_REFINE_CONTOUR
+        detectorParams.cornerRefinementWinSize = 4
+        detectorParams.cornerRefinementMaxIterations = 200
+        detectorParams.cornerRefinementMinAccuracy = 0.05
+
+        # Get the predefined ArUco dictionary for detecting markers
         dictionary = aruco.getPredefinedDictionary(robots_dictionary)
         aruco_marker_detector = aruco.ArucoDetector(dictionary, detectorParams)
 
-        # Lade die mechalino-IDs und andere Parameter
-        mechalino_ids = np.array(rospy.get_param('~mechalino_ids'))
+        # Load robot IDs and other parameters from the ROS parameter server
+        mechalino_ids = np.array(rospy.get_param('~mechalino_ids'))  # Array of Mechalino robot IDs
         number_of_specified_robots = len(mechalino_ids)
 
-        camera_matrix = np.array(rospy.get_param('~camera_matrix'))
-        distortion_coeffs = np.array(rospy.get_param('~dist_coeff'))
+        camera_matrix = np.array(rospy.get_param('~camera_matrix'))  # Camera intrinsic matrix
+        distortion_coeffs = np.array(rospy.get_param('~dist_coeff'))  # Camera distortion coefficients
 
+        # Define the 3D coordinates of the robot marker corners
         robots_marker_size = np.array(rospy.get_param('~robots_marker_size'))
         objPoints = np.zeros((4, 1, 3))
         objPoints[3] = np.array([-robots_marker_size / 2.0, -robots_marker_size / 2.0, 0])
@@ -167,16 +186,18 @@ if __name__ == '__main__':
         objPoints[1] = np.array([robots_marker_size / 2.0, robots_marker_size / 2.0, 0])
         objPoints[0] = np.array([-robots_marker_size / 2.0, robots_marker_size / 2.0, 0])
 
-        # Initialisiere den Transform-Broadcaster
+        # Initialize the tf2 transform broadcaster
         broadcaster = tf2_ros.TransformBroadcaster()
 
-        # Erstelle Pose-Publisher für jeden Roboter
+        # Create publishers for each robot's pose
         pose_publishers = []
         for i in range(len(mechalino_ids)):
             pose_publishers.append(rospy.Publisher(f"pos/mechalino_{mechalino_ids[i]}", Float32MultiArray, queue_size=1))
 
-        # Abonniere das Kamerabild und starte den Callback
+        # Subscribe to the camera image topic to start the image processing callback
         rospy.Subscriber("/camera/image", Image, image_callback)
+
+        # Keep the node running
         rospy.spin()
 
     except rospy.ROSInterruptException:
