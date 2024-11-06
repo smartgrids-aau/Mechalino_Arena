@@ -26,8 +26,8 @@ char message[528] = "";  // Buffer for incoming messages
 char xValue[8] = "";
 char yValue[8] = "";
 char yawValue[10] = "";
-char xValues[250] = "";  // Adjust size as needed
-char yValues[250] = "";  // Adjust size as needed
+char xValues[250] = "";
+char yValues[250] = "";
 char amountCoordinates[4] = "";
 char udpMessage[1024];
 char stmData[256] = "";
@@ -47,17 +47,28 @@ RobotState currentState = CONNECTING;
 /* Timing Variables */
 unsigned long lastRequestTime = 0;
 unsigned long lastReceivedTime = 0;  // Keeps track of the last time data was received from ROS
-unsigned long lastUdpTime = 0;
-unsigned long requestInterval = 200;  // sending request in ms
+unsigned long lastSpinTime = 0;
+unsigned long requestInterval = 150;  // sending request in ms
 unsigned long previousLoopTime = 0;
 const unsigned long loopInterval = 10;  // 10ms
 bool sentRequest = false;
 bool pathRequested = false;
 
+/* New Timing Variables */
+unsigned long wifiConnectStartTime = 0;
+const unsigned long wifiTimeout = 10000;  // 10 seconds
+unsigned long clientConnectStartTime = 0;
+const unsigned long clientConnectInterval = 5000;  // 5 seconds
+
 /* Serial Buffer Definitions */
 #define SERIAL_BUFFER_SIZE 512
 char serial_buffer[SERIAL_BUFFER_SIZE];
 size_t serial_index = 0;
+
+/* Client Buffer for Non-blocking Reads */
+#define CLIENT_BUFFER_SIZE 528
+char clientBuffer[CLIENT_BUFFER_SIZE];
+size_t clientBufferIndex = 0;
 
 /* Function Prototypes */
 void setup();
@@ -66,20 +77,16 @@ void sendTCP(const char* message);
 void handleState(RobotState& state);
 bool listenToSerial(char* stmData, size_t maxLength);
 void sendStatusUDP(const char* stmData);
+bool readLineFromClient(char* destBuffer, size_t destBufferSize);
 
 /* Setup Function */
 void setup() {
-  Serial.begin(500000);
+  Serial.begin(115200);
   WiFi.mode(WIFI_STA);
-  WiFi.begin(ssid, password);
 
-  // Connect to Wi-Fi
-  while (WiFi.status() != WL_CONNECTED) {
-    delay(1000);
-    Serial.println("Connecting to WiFi...");
-  }
-  Serial.println("Connected to WiFi!");
-  serverIP = WiFi.gatewayIP();
+  // Start Wi-Fi connection without blocking
+  WiFi.begin(ssid, password);
+  wifiConnectStartTime = millis();
 
   // Initialize UDP
   udp.begin(udpPort);
@@ -102,6 +109,7 @@ void loop() {
       sendStatusUDP(stmData);
     }
   }
+  yield();  // Allow background tasks to run
 }
 
 /**
@@ -125,69 +133,79 @@ void sendTCP(const char* message) {
 void handleState(RobotState& state) {
   switch (state) {
     case CONNECTING:
-      Serial.println("STOP");  // Send "STOP" to STM32F4
-      // Connect to ROS server
-      if (WiFi.status() == WL_CONNECTED) {
-        if (client.connect(serverIP, server_port)) {
-          state = REGISTERING;
-          if (strlen(robotID) == 0) {
-            strcpy(messageToSend, "REGISTER");
+      // Non-blocking Wi-Fi connection
+      if (WiFi.status() != WL_CONNECTED) {
+        if (millis() - wifiConnectStartTime >= wifiTimeout) {
+          Serial.println("Wi-Fi connection timeout.");
+          wifiConnectStartTime = millis();  // Reset timer
+        }
+        // Return to allow other tasks to run
+        return;
+      }
+
+      // Wi-Fi is connected
+      serverIP = WiFi.gatewayIP();
+
+      // Non-blocking server connection
+      if (!client.connected()) {
+        if (millis() - clientConnectStartTime >= clientConnectInterval) {
+          clientConnectStartTime = millis();  // Reset timer
+          if (client.connect(serverIP, server_port)) {
+            state = REGISTERING;
+            if (strlen(robotID) == 0) {
+              strcpy(messageToSend, "REGISTER");
+            } else {
+              snprintf(messageToSend, sizeof(messageToSend), "REGISTER %s", robotID);
+            }
+            sendTCP(messageToSend);
+            lastReceivedTime = millis();  // Update last received time
           } else {
-            snprintf(messageToSend, sizeof(messageToSend), "REGISTER %s", robotID);
+            Serial.println("Server connection failed. Retrying...");
           }
-          sendTCP(messageToSend);
-          lastReceivedTime = millis();  // Update last received time
-        } else {
-          delay(1000);  // Wait a bit before retrying
         }
-      } else {
-        WiFi.begin(ssid, password);
-        while (WiFi.status() != WL_CONNECTED) {
-          delay(1000);
-        }
-        serverIP = WiFi.gatewayIP();
+        // Return to allow other tasks to run
+        return;
       }
       break;
 
     case REGISTERING:
-      if (client.connected() && client.available() > 0) {
-        client.readBytesUntil('\n', message, sizeof(message) - 1);
-        message[sizeof(message) - 1] = '\0';  // Ensure null-termination
-        if (strlen(robotID) == 0) {
-          if (strncmp(message, "SPIN", 4) == 0) {
-            Serial.println("START_SPINNING");
-            state = SPINNING;
-          }
-        } else {
-          if (strncmp(message, "REGISTERED", 10) == 0) {
-            state = REGISTERED;
-          }
-        }
+      if (client.connected() && readLineFromClient(message, sizeof(message))) {
         lastReceivedTime = millis();  // Update last received time
+        if (strncmp(message, "SPIN", 4) == 0) {
+          Serial.println("START_SPINNING");
+          state = SPINNING;
+        } else if (strncmp(message, "REGISTERED", 10) == 0) {
+          state = REGISTERED;
+        }
       }
 
-      if ((millis() - lastReceivedTime) >= 2000) {  // 2000 milliseconds = 2 seconds
-        state = CONNECTING;                         // Switch state to CONNECTING
-        sentRequest = false;                        // Reset request flag
+      if ((millis() - lastReceivedTime) >= 10000) {  // 10 seconds timeout
+        Serial.println("STOP");
+        state = CONNECTING;   // Switch state to CONNECTING
+        sentRequest = false;  // Reset request flag
       }
       break;
 
     case SPINNING:
-      if (client.connected() && client.available() > 0) {
-        client.readBytesUntil('\n', message, sizeof(message) - 1);
-        message[sizeof(message) - 1] = '\0';  // Ensure null-termination
-        if (strncmp(message, "REGISTER_COMPLETE", 17) == 0) {
-          // Extract robotID
-          char* idStart = strchr(message, ' ');
-          if (idStart != NULL) {
-            idStart++;
-            strncpy(robotID, idStart, sizeof(robotID) - 1);
-            robotID[sizeof(robotID) - 1] = '\0';  // Ensure null-termination
-          }
-          Serial.println("STOP");
-          state = REGISTERED;
+      if (client.connected()) {
+        if ((millis() - lastSpinTime) >= 2000) {  // 10 seconds timeout
+          lastSpinTime = millis();
+          Serial.println("START_SPINNING");
         }
-        lastReceivedTime = millis();  // Update last received time
+        if (readLineFromClient(message, sizeof(message))) {
+          lastReceivedTime = millis();  // Update last received time
+          if (strncmp(message, "REGISTER_COMPLETE", 17) == 0) {
+            // Extract robotID
+            char* idStart = strchr(message, ' ');
+            if (idStart != NULL) {
+              idStart++;
+              strncpy(robotID, idStart, sizeof(robotID) - 1);
+              robotID[sizeof(robotID) - 1] = '\0';  // Ensure null-termination
+            }
+            Serial.println("STOP");
+            state = REGISTERED;
+          }
+        }
       }
       break;
 
@@ -208,10 +226,9 @@ void handleState(RobotState& state) {
         state = CONNECTING;
       }
 
-      if (client.connected() && client.available() > 0) {
-        client.readBytesUntil('\n', message, sizeof(message) - 1);
-        message[sizeof(message) - 1] = '\0';                                                     // Ensure null-termination
-        if (strncmp(message, "LOCATION_UPDATE", 15) == 0 && strstr(message, robotID) != NULL) {  // "LOCATION_UPDATE x:x_now;y:y_now;yaw:yaw_now robotID"
+      if (client.connected() && readLineFromClient(message, sizeof(message))) {
+        lastReceivedTime = millis();  // Update last received time
+        if (strncmp(message, "LOCATION_UPDATE", 15) == 0 && strstr(message, robotID) != NULL) {
           // Extract x, y, yaw values
           sscanf(message, "LOCATION_UPDATE x:%7[^;];y:%7[^;];yaw:%9s", xValue, yValue, yawValue);
 
@@ -230,13 +247,13 @@ void handleState(RobotState& state) {
           Serial.println("STOP");
         } else if (strncmp(message, "REGISTER", 8) == 0) {
           state = CONNECTING;
+          Serial.println("STOP");
         }
-        lastReceivedTime = millis();  // Update last received time
       }
 
-      if ((millis() - lastReceivedTime) >= 2000) {  // 2000 milliseconds = 2 seconds
-        state = CONNECTING;                         // Switch state to CONNECTING
-        sentRequest = false;                        // Reset request flag
+      if ((millis() - lastReceivedTime) >= 10000) {  // 10 seconds timeout
+        state = CONNECTING;                          // Switch state to CONNECTING
+        sentRequest = false;                         // Reset request flag
       }
       break;
 
@@ -248,12 +265,9 @@ void handleState(RobotState& state) {
         state = CONNECTING;
       }
 
-      if (client.connected() && client.available() > 0) {
-        client.readBytesUntil('\n', message, sizeof(message) - 1);
-        message[sizeof(message) - 1] = '\0';                                                 // Ensure null-termination
-        if (strncmp(message, "PATH_UPDATE", 11) == 0 && strstr(message, robotID) != NULL) {  // "PATH_UPDATE x:x0_next:x1_next:xn_next;y:y0_next:y1_next:yn_next;amount_coordinates robotID"
-          // Extract x, y values
-
+      if (client.connected() && readLineFromClient(message, sizeof(message))) {
+        lastReceivedTime = millis();  // Update last received time
+        if (strncmp(message, "PATH_UPDATE", 11) == 0 && strstr(message, robotID) != NULL) {
           // Parse the message
           sscanf(message, "PATH_UPDATE x:%249[^;];y:%249[^;];%3s", xValues, yValues, amountCoordinates);
 
@@ -269,32 +283,64 @@ void handleState(RobotState& state) {
           Serial.println("STOP");
         } else if (strncmp(message, "REGISTER", 8) == 0) {
           state = CONNECTING;
+          Serial.println("STOP");
         }
-        lastReceivedTime = millis();  // Update last received time
       }
 
-      if ((millis() - lastReceivedTime) >= 2000) {  // 2000 milliseconds = 2 seconds
-        state = CONNECTING;                         // Switch state to CONNECTING
-        sentRequest = false;                        // Reset request flag
+      if ((millis() - lastReceivedTime) >= 10000) {  // 10 seconds timeout
+        state = CONNECTING;                          // Switch state to CONNECTING
+        sentRequest = false;                         // Reset request flag
       }
       break;
 
     case END:
-      if (client.connected() && client.available() > 0) {
-        sentRequest = false;
-        pathRequested = false;
-        client.readBytesUntil('\n', message, sizeof(message) - 1);
-        message[sizeof(message) - 1] = '\0';  // Ensure null-termination
+      if (client.connected() && readLineFromClient(message, sizeof(message))) {
+        lastReceivedTime = millis();  // Update last received time
         Serial.print("Message from server: ");
         Serial.println(message);
       }
       break;
   }
+
   // Reconnect if disconnected
   if ((state != CONNECTING) && !client.connected()) {
+    Serial.println("STOP");
     state = CONNECTING;
     sentRequest = false;
   }
+}
+
+/**
+ * @brief Read a line from the client non-blockingly.
+ * @param destBuffer Buffer to store the message.
+ * @param destBufferSize Size of the buffer.
+ * @return True if a complete message was read, false otherwise.
+ */
+bool readLineFromClient(char* destBuffer, size_t destBufferSize) {
+  while (client.available() > 0) {
+    char c = client.read();
+    if (c == '\n') {
+      // Null-terminate and copy the message
+      clientBuffer[clientBufferIndex] = '\0';
+      if (clientBufferIndex < destBufferSize) {
+        strncpy(destBuffer, clientBuffer, destBufferSize - 1);
+        destBuffer[destBufferSize - 1] = '\0';
+      } else {
+        strncpy(destBuffer, clientBuffer, destBufferSize - 1);
+        destBuffer[destBufferSize - 1] = '\0';
+      }
+      clientBufferIndex = 0;
+      return true;
+    } else {
+      if (clientBufferIndex < CLIENT_BUFFER_SIZE - 1) {
+        clientBuffer[clientBufferIndex++] = c;
+      } else {
+        clientBufferIndex = 0;
+      }
+    }
+    yield();  // Allow background tasks to run
+  }
+  return false;
 }
 
 /**
@@ -317,26 +363,19 @@ bool listenToSerial(char* stmData, size_t maxLength) {
         // Handle buffer overflow
         strncpy(stmData, serial_buffer, maxLength - 1);
         stmData[maxLength - 1] = '\0';
-        //Serial.println("Warning: stmData buffer overflow.");
       }
-
-      // Log the complete message
-      //Serial.print("Complete Message Received: ");
-      //Serial.println(stmData);
 
       // Reset the serial buffer index for the next message
       serial_index = 0;
-
       return true;  // Complete message received
     } else {
       if (serial_index < SERIAL_BUFFER_SIZE - 1) {
         serial_buffer[serial_index++] = c;
       } else {
-        // Buffer overflow, reset
-        //Serial.println("Error: Serial buffer overflow.");
         serial_index = 0;
       }
     }
+    yield();  // Allow background tasks to run
   }
 
   return false;  // No complete message received yet
@@ -348,12 +387,11 @@ bool listenToSerial(char* stmData, size_t maxLength) {
  */
 void sendStatusUDP(const char* stmData) {
   // Send UDP broadcast with robot status
-  lastUdpTime = millis();
   if (strlen(robotID) > 0 && strlen(currentLocation) > 0 && strlen(stmData) > 0) {
-    size_t offset = 0;
-
-    // Construct the UDP message
-    offset += snprintf(udpMessage + offset, sizeof(udpMessage) - offset, "%s;%s;%s", robotID, currentLocation, stmData);
+    int len = snprintf(udpMessage, sizeof(udpMessage), "%s;%s;%s", robotID, currentLocation, stmData);
+    if (len < 0 || len >= (int)sizeof(udpMessage)) {
+      return;  // Avoid sending an incomplete message
+    }
 
     // Ensure null-termination
     udpMessage[sizeof(udpMessage) - 1] = '\0';
@@ -365,8 +403,12 @@ void sendStatusUDP(const char* stmData) {
 
     // Include path data if updated
     if (strlen(pathLocations) > 0) {
+      int lenPath = snprintf(udpMessage, sizeof(udpMessage), "%s", pathLocations);
+      if (lenPath < 0 || lenPath >= (int)sizeof(udpMessage)) {
+        return;
+      }
       udp.beginPacket(udpAddress, udpPort);
-      udp.write((uint8_t*)pathLocations, strlen(pathLocations));
+      udp.write((uint8_t*)udpMessage, strlen(udpMessage));
       udp.endPacket();
     }
   }
