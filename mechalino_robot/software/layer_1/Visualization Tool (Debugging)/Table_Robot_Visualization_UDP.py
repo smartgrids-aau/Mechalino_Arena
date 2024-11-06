@@ -28,7 +28,7 @@ USABLE_HEIGHT = TABLE_HEIGHT - 2 * BORDER_THICKNESS
 
 # Robot circle properties
 ROBOT_RADIUS = 0.06  # 12 cm diameter
-TARGET_RADIUS = 0.03  # 6 cm diameter
+TARGET_RADIUS = 0.04  # 6 cm diameter
 SCALE_FACTOR = 500  # Scale factor for converting meters to pixels
 
 STATES_MAP = {"0": "IDLE", "1": "ROTATING", "2": "MOVING", "3": "SPINNING"}
@@ -107,128 +107,133 @@ def draw_star(x_center, y_center, radius, points=5, fill_color="yellow", outline
 
 
 # Function to draw the targets and their status
-def draw_targets(ip_address):
-    robot = robots.get(ip_address, {})
-    current_index, x_coords, y_coords, _ = robot.get("targets", {}).values()
-    robot_color = robot.get("drawings", {}).get("robot_color", "blue")
+def draw_targets():
+    for ip_address in list(robots.keys()):
+        robot = robots.get(ip_address, {})
+        targets = robot.get("targets", {})
+        x_coords = targets.get("x_coords", [])
+        y_coords = targets.get("y_coords", [])
+        amount_coords = targets.get("amount_coords", 0)
+        current_index = targets.get("current_target_index", 0)
+        robot_color = robot.get("drawings", {}).get("robot_color", "blue")
 
-    for i in range(len(x_coords)):
-        target_pixel_x = x_coords[i] * SCALE_FACTOR
-        target_pixel_y = y_coords[i] * SCALE_FACTOR * -1  # Flip Y-coordinate
+        for i in range(len(x_coords)):
+            target_pixel_x = x_coords[i] * SCALE_FACTOR
+            target_pixel_y = y_coords[i] * SCALE_FACTOR * -1  # Flip Y-coordinate
 
-        if i < current_index:
-            # Covered target: Green circle with no fill
-            canvas.create_oval(
-                target_pixel_x - TARGET_RADIUS * SCALE_FACTOR,
-                target_pixel_y - TARGET_RADIUS * SCALE_FACTOR,
-                target_pixel_x + TARGET_RADIUS * SCALE_FACTOR,
-                target_pixel_y + TARGET_RADIUS * SCALE_FACTOR,
-                outline="black", fill="black", width=2
-            )
-            canvas.create_oval(
-                target_pixel_x - TARGET_RADIUS * SCALE_FACTOR,
-                target_pixel_y - TARGET_RADIUS * SCALE_FACTOR,
-                target_pixel_x + TARGET_RADIUS * SCALE_FACTOR,
-                target_pixel_y + TARGET_RADIUS * SCALE_FACTOR,
-                outline=robot_color, fill="", width=2
-            )
-        elif i == current_index:
-            # Current target: Yellow star
-            canvas.create_oval(
-                target_pixel_x - TARGET_RADIUS * SCALE_FACTOR,
-                target_pixel_y - TARGET_RADIUS * SCALE_FACTOR,
-                target_pixel_x + TARGET_RADIUS * SCALE_FACTOR,
-                target_pixel_y + TARGET_RADIUS * SCALE_FACTOR,
-                outline="black", fill="black", width=2
-            )
-            draw_star(
-                target_pixel_x, target_pixel_y, TARGET_RADIUS * SCALE_FACTOR, points=5,
-                fill_color=robot_color, outline_color="yellow"
-            )
-        else:
-            # Remaining target: Red circle with fill
-            canvas.create_oval(
-                target_pixel_x - TARGET_RADIUS * SCALE_FACTOR,
-                target_pixel_y - TARGET_RADIUS * SCALE_FACTOR,
-                target_pixel_x + TARGET_RADIUS * SCALE_FACTOR,
-                target_pixel_y + TARGET_RADIUS * SCALE_FACTOR,
-                outline="black", fill="black", width=2
-            )
-            canvas.create_oval(
-                target_pixel_x - TARGET_RADIUS * SCALE_FACTOR,
-                target_pixel_y - TARGET_RADIUS * SCALE_FACTOR,
-                target_pixel_x + TARGET_RADIUS * SCALE_FACTOR,
-                target_pixel_y + TARGET_RADIUS * SCALE_FACTOR,
-                outline=robot_color, fill=robot_color, width=2
-            )
+            if i < current_index:
+                # Covered target: Green circle with no fill
+                canvas.create_oval(
+                    target_pixel_x - TARGET_RADIUS * SCALE_FACTOR,
+                    target_pixel_y - TARGET_RADIUS * SCALE_FACTOR,
+                    target_pixel_x + TARGET_RADIUS * SCALE_FACTOR,
+                    target_pixel_y + TARGET_RADIUS * SCALE_FACTOR,
+                    outline="black", fill="black", width=2
+                )
+                canvas.create_oval(
+                    target_pixel_x - TARGET_RADIUS * SCALE_FACTOR,
+                    target_pixel_y - TARGET_RADIUS * SCALE_FACTOR,
+                    target_pixel_x + TARGET_RADIUS * SCALE_FACTOR,
+                    target_pixel_y + TARGET_RADIUS * SCALE_FACTOR,
+                    outline=robot_color, fill="", width=2
+                )
+            elif i == current_index:
+                # Current target: Yellow star
+                canvas.create_oval(
+                    target_pixel_x - TARGET_RADIUS * SCALE_FACTOR,
+                    target_pixel_y - TARGET_RADIUS * SCALE_FACTOR,
+                    target_pixel_x + TARGET_RADIUS * SCALE_FACTOR,
+                    target_pixel_y + TARGET_RADIUS * SCALE_FACTOR,
+                    outline="black", fill="black", width=2
+                )
+                draw_star(
+                    target_pixel_x, target_pixel_y, TARGET_RADIUS * SCALE_FACTOR, points=5,
+                    fill_color=robot_color, outline_color="yellow"
+                )
+            else:
+                # Remaining target: Red circle with fill
+                canvas.create_oval(
+                    target_pixel_x - TARGET_RADIUS * SCALE_FACTOR,
+                    target_pixel_y - TARGET_RADIUS * SCALE_FACTOR,
+                    target_pixel_x + TARGET_RADIUS * SCALE_FACTOR,
+                    target_pixel_y + TARGET_RADIUS * SCALE_FACTOR,
+                    outline="black", fill="black", width=2
+                )
+                canvas.create_oval(
+                    target_pixel_x - TARGET_RADIUS * SCALE_FACTOR,
+                    target_pixel_y - TARGET_RADIUS * SCALE_FACTOR,
+                    target_pixel_x + TARGET_RADIUS * SCALE_FACTOR,
+                    target_pixel_y + TARGET_RADIUS * SCALE_FACTOR,
+                    outline=robot_color, fill=robot_color, width=2
+                )
 
 
 # Function to draw the robot and path
-def draw_robot_and_path(ip_address):
-    robot = robots.get(ip_address, {})
-    x, y, yaw = robot.get("location", {}).values()
+def draw_robot_and_path():
+    for ip_address in list(robots.keys()):
+        robot = robots.get(ip_address, {})
+        x, y, yaw = robot.get("location", {}).values()
 
-    # Convert meters to pixels (flip y-coordinate because GUI origin is top-left)
-    pixel_x = x * SCALE_FACTOR
-    pixel_y = (y * SCALE_FACTOR * -1)  # Adjusting for negative y-coordinates
+        # Convert meters to pixels (flip y-coordinate because GUI origin is top-left)
+        pixel_x = x * SCALE_FACTOR
+        pixel_y = (y * SCALE_FACTOR * -1)  # Adjusting for negative y-coordinates
 
-    robot_color = robot.get("drawings", {}).get("robot_color", "blue")
+        robot_color = robot.get("drawings", {}).get("robot_color", "blue")
 
-    # Draw or update the robot circle
-    if 'robot_circle' not in robot.get('drawings', {}):
-        # Create new robot representation if it doesn't exist
-        robot.setdefault('drawings', {})['robot_circle'] = canvas.create_oval(
-            pixel_x - ROBOT_RADIUS * SCALE_FACTOR,
-            pixel_y - ROBOT_RADIUS * SCALE_FACTOR,
-            pixel_x + ROBOT_RADIUS * SCALE_FACTOR,
-            pixel_y + ROBOT_RADIUS * SCALE_FACTOR,
-            outline=robot_color, width=2
-        )
-    else:
-        # Update existing robot circle position
-        canvas.coords(
-            robot.get('drawings', {}).get('robot_circle'),
-            pixel_x - ROBOT_RADIUS * SCALE_FACTOR,
-            pixel_y - ROBOT_RADIUS * SCALE_FACTOR,
-            pixel_x + ROBOT_RADIUS * SCALE_FACTOR,
-            pixel_y + ROBOT_RADIUS * SCALE_FACTOR
-        )
-
-    # Draw or update the yaw arrow
-    arrow_length = ROBOT_RADIUS * SCALE_FACTOR * 1
-    arrow_x = pixel_x + arrow_length * math.sin(math.radians(yaw))
-    arrow_y = pixel_y - arrow_length * math.cos(math.radians(yaw))
-
-    if 'robot_arrow' not in robot.get('drawings', {}):
-        # Create new arrow if it doesn't exist
-        robot.setdefault('drawings', {})['robot_arrow'] = canvas.create_line(
-            pixel_x, pixel_y, arrow_x, arrow_y, fill=robot_color, width=2, arrow=tk.LAST
-        )
-    else:
-        # Update existing arrow position
-        canvas.coords(
-            robot.get('drawings', {}).get('robot_arrow'),
-            pixel_x, pixel_y, arrow_x, arrow_y
-        )
-
-    # Store the current position in the robot's path
-    if 'path_lines' not in robot.get('drawings', {}):
-        robot.setdefault('drawings', {})['path_lines'] = []
-
-    # append the current position to the path
-    # Store the path points in 'path_lines' and append the new point
-    robot.setdefault('drawings', {}).setdefault('path_lines', []).append((pixel_x, pixel_y))
-
-    # Draw or update the path lines
-    if len(robot['drawings']['path_lines']) > 1:
-        if 'path_line_obj' not in robot['drawings']:
-            # Create the initial line object on the canvas
-            robot['drawings']['path_line_obj'] = canvas.create_line(
-                *sum(robot['drawings']['path_lines'], ()), fill=robot_color, width=2
+        # Draw or update the robot circle
+        if 'robot_circle' not in robot.get('drawings', {}):
+            # Create new robot representation if it doesn't exist
+            robot.setdefault('drawings', {})['robot_circle'] = canvas.create_oval(
+                pixel_x - ROBOT_RADIUS * SCALE_FACTOR,
+                pixel_y - ROBOT_RADIUS * SCALE_FACTOR,
+                pixel_x + ROBOT_RADIUS * SCALE_FACTOR,
+                pixel_y + ROBOT_RADIUS * SCALE_FACTOR,
+                outline=robot_color, width=2
             )
         else:
-            # Update the existing line object with the new set of points
-            canvas.coords(robot['drawings']['path_line_obj'], *sum(robot['drawings']['path_lines'], ()))
+            # Update existing robot circle position
+            canvas.coords(
+                robot.get('drawings', {}).get('robot_circle'),
+                pixel_x - ROBOT_RADIUS * SCALE_FACTOR,
+                pixel_y - ROBOT_RADIUS * SCALE_FACTOR,
+                pixel_x + ROBOT_RADIUS * SCALE_FACTOR,
+                pixel_y + ROBOT_RADIUS * SCALE_FACTOR
+            )
+
+        # Draw or update the yaw arrow
+        arrow_length = ROBOT_RADIUS * SCALE_FACTOR * 1
+        arrow_x = pixel_x + arrow_length * math.sin(math.radians(yaw))
+        arrow_y = pixel_y - arrow_length * math.cos(math.radians(yaw))
+
+        if 'robot_arrow' not in robot.get('drawings', {}):
+            # Create new arrow if it doesn't exist
+            robot.setdefault('drawings', {})['robot_arrow'] = canvas.create_line(
+                pixel_x, pixel_y, arrow_x, arrow_y, fill=robot_color, width=2, arrow=tk.LAST
+            )
+        else:
+            # Update existing arrow position
+            canvas.coords(
+                robot.get('drawings', {}).get('robot_arrow'),
+                pixel_x, pixel_y, arrow_x, arrow_y
+            )
+
+        # Store the current position in the robot's path
+        if 'path_lines' not in robot.get('drawings', {}):
+            robot.setdefault('drawings', {})['path_lines'] = []
+
+        # append the current position to the path
+        # Store the path points in 'path_lines' and append the new point
+        robot.setdefault('drawings', {}).setdefault('path_lines', []).append((pixel_x, pixel_y))
+
+        # Draw or update the path lines
+        if len(robot['drawings']['path_lines']) > 1:
+            if 'path_line_obj' not in robot['drawings']:
+                # Create the initial line object on the canvas
+                robot['drawings']['path_line_obj'] = canvas.create_line(*sum(robot['drawings']['path_lines'], ()),
+                                                                        fill=robot_color, width=2)
+            else:
+                # Update the existing line object with the new set of points
+                canvas.coords(robot['drawings']['path_line_obj'], *sum(robot['drawings']['path_lines'], ()))
 
 
 # Function to parse the incoming message and extract robot data
@@ -246,11 +251,9 @@ def handle_message(message, ip_address):
             amount_coords = int(parts[2])
             robots.setdefault(ip_address, {}).setdefault("targets", {}).update(
                 {"x_coords": x_coords, "y_coords": y_coords, "amount_coords": amount_coords})
-            draw_targets(ip_address)
             return
 
         robot_id = parts[0]
-        #esp_state = STATES_ESP_MAP.get(parts[1], "UNKNOWN")
         current_x = float(parts[1])
         current_y = float(parts[2])
         current_yaw = float(parts[3])
@@ -271,9 +274,9 @@ def handle_message(message, ip_address):
             "current_target_index": current_target_index
         })
 
-        # Use setdefault to preserve existing "drawings" entries and only update "circle_color" and "last_update"
+        # Use setdefault to preserve existing "drawings" entries and only update "robot_color" and "last_update"
         robots.setdefault(ip_address, {}).setdefault("drawings", {}).update({
-            "circle_color": robots[ip_address]["drawings"].get("circle_color", random.choice(ROBOT_COLORS)),
+            "robot_color": robots[ip_address]["drawings"].get("robot_color", random.choice(ROBOT_COLORS)),
             "last_update": time.time()
         })
 
@@ -294,11 +297,6 @@ def handle_message(message, ip_address):
         robots.setdefault(ip_address, {}).get("calculations", {}).get("calculated_pids").append(calculated_pid)
         robots.setdefault(ip_address, {}).get("drawings", {}).get("elapsed_times").append(elapsed_time)
 
-        #print(robots)
-
-        # Draw/update robot path and yaw
-        draw_robot_and_path(ip_address)
-
     except Exception as e:
         print(f"Error parsing message: {e}")
 
@@ -310,13 +308,11 @@ def remove_old_robots():
                  current_time - robot.get("drawings", {}).get("last_update", 0) > TIMEOUT_THRESHOLD]
 
     for ip in to_remove:
-        """print(f"Removing robot with IP: {ip}")
+        print(f"Removing robot with IP: {ip}")
         # Remove robot form the dictionary and its drawings from the canvas
         robots.pop(ip)
         canvas_redraw()
-        # refresh the plotlib
-        plt.draw()"""
-    # make the canvas empty
+
     # Call this function again after a delay to continuously check for outdated robots
     root.after(1000, remove_old_robots)
 
@@ -356,7 +352,7 @@ line_motor_r, = ax.plot([], [], label='Motor R Speed', color='red')
 ax.legend()
 
 
-def update_plot(frame):
+def update_plot(*args):
     for ip_address, robot in robots.items():
         if "elapsed_times" not in robot.get("drawings", {}) or len(robot.get("drawings", {}).get("elapsed_times")) == 0:
             continue  # skip this robot if no data to plot
@@ -375,7 +371,7 @@ def update_plot(frame):
         line_motor_r.set_data(elapsed_times, motor_speed_r)
 
         # Adjust axis limits dynamically
-        ax.set_xlim(0, 150)
+        ax.set_xlim(0, max(elapsed_times) if elapsed_times else 1)
         y_min = min(min(angle_errors), min(motor_speed_l), min(motor_speed_r), -50)
         y_max = max(max(angle_errors), max(motor_speed_l), max(motor_speed_r), 50)
         ax.set_ylim(y_min, y_max)
@@ -396,6 +392,8 @@ listener_thread.start()
 # Start the data processing loop and the robot removal loop
 root.after(100, process_data)
 root.after(1000, remove_old_robots)
+root.after(200, draw_robot_and_path)
+root.after(500, draw_targets)
 
 # Show the Tkinter GUI and the plot
 plt.show()
