@@ -1,0 +1,40 @@
+Output: Gerber Files
+Type  : Gerber
+From  : Variant [[No Variations]] of Project [Mechalino_Second_Layer.PrjPcb]
+   Generated File[Mechalino_Second_Layer.GTO]
+   Generated File[Mechalino_Second_Layer.GTP]
+   Generated File[Mechalino_Second_Layer.GTS]
+   Generated File[Mechalino_Second_Layer.GTL]
+   Generated File[Mechalino_Second_Layer.GBL]
+   Generated File[Mechalino_Second_Layer.GBS]
+   Generated File[Mechalino_Second_Layer.GBP]
+   Generated File[Mechalino_Second_Layer.GBO]
+   Generated File[Mechalino_Second_Layer.GM1]
+   Generated File[Mechalino_Second_Layer.GM3]
+   Generated File[Mechalino_Second_Layer.GM4]
+   Generated File[Mechalino_Second_Layer.GM5]
+   Generated File[Mechalino_Second_Layer.GM11]
+   Generated File[Mechalino_Second_Layer.GM12]
+   Generated File[Mechalino_Second_Layer.GM13]
+   Generated File[Mechalino_Second_Layer.GM15]
+   Generated File[Mechalino_Second_Layer.GM16]
+   Generated File[Mechalino_Second_Layer.GM20]
+   Generated File[Mechalino_Second_Layer.GM21]
+   Generated File[Mechalino_Second_Layer.GM23]
+   Generated File[Mechalino_Second_Layer.GM24]
+   Generated File[Mechalino_Second_Layer.GKO]
+   Generated File[Mechalino_Second_Layer.GPT]
+   Generated File[Mechalino_Second_Layer.GPB]
+   Generated File[Mechalino_Second_Layer.1]
+   Generated File[Mechalino_Second_Layer.GML]
+   Generated File[Mechalino_Second_Layer.GD1]
+   Generated File[Mechalino_Second_Layer.GG1]
+   Generated File[Mechalino_Second_Layer.GM]
+   Generated File[Mechalino_Second_Layer.EXTREP]
+   Generated File[Mechalino_Second_Layer.REP]
+
+
+Files Generated   : 31
+Documents Printed : 0
+
+Finished Output Generation At 12:45:53 On 05/08/2024
