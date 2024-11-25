@@ -1,9 +1,9 @@
 /* USER CODE BEGIN Header */
 /**
- ******************************************************************************
+ ***********************************************
  * @file           : main.c
  * @brief          : Main program body
- ******************************************************************************
+ ***********************************************
  * @attention
  *
  * Copyright (c) 2024 STMicroelectronics.
@@ -13,10 +13,9 @@
  * in the root directory of this software component.
  * If no LICENSE file comes with this software, it is provided AS-IS.
  *
- ******************************************************************************
- */
+ ************************************************/
 /* USER CODE END Header */
-/* Includes ------------------------------------------------------------------*/
+/* Includes ----------------------------------------------*/
 #include "main.h"
 #include "adc.h"
 #include "i2c.h"
@@ -24,7 +23,7 @@
 #include "usart.h"
 #include "gpio.h"
 
-/* Private includes ----------------------------------------------------------*/
+/* Private includes --------------------------------------*/
 /* USER CODE BEGIN Includes */
 #include <string.h>
 #include <stdlib.h>
@@ -33,7 +32,7 @@
 #include <inttypes.h>  // Include for uint16_t format specifiers
 /* USER CODE END Includes */
 
-/* Private typedef -----------------------------------------------------------*/
+/* Private typedef ---------------------------------------*/
 /* USER CODE BEGIN PTD */
 typedef struct {
 	TIM_HandleTypeDef *htim;
@@ -57,7 +56,7 @@ typedef struct {
 
 /* USER CODE END PTD */
 
-/* Private define ------------------------------------------------------------*/
+/* Private define ----------------------------------------*/
 /* USER CODE BEGIN PD */
 
 /* PWM Values for Servo Control */
@@ -75,8 +74,8 @@ typedef struct {
 /* Thresholds and PID Gains */
 #define ANGLE_THRESHOLD_ROTATE_TO_MOVE  3.0f  	// Degrees
 #define ANGLE_THRESHOLD_MOVE_TO_ROTATE 30.0f  	// Degrees
-#define DISTANCE_THRESHOLD_MOVE_TO_STOP 0.08f  	// Stop moving when within this distance
-#define DISTANCE_THRESHOLD_STOP_TO_MOVE 0.11f	// Start moving again when beyond this distance
+#define DISTANCE_THRESHOLD_MOVE_TO_STOP 0.12f  	// Stop moving when within this distance
+#define DISTANCE_THRESHOLD_STOP_TO_MOVE 0.15f	// Start moving again when beyond this distance
 
 #define KP_ROTATION 10.0f 	// Proportional gain for rotation
 #define KI_ROTATION 0.0f 	// Integral gain for rotation
@@ -94,12 +93,12 @@ typedef struct {
 #define SERIAL_SEND_INTERVAL 1000	// Interval in ms to send data over serial
 /* USER CODE END PD */
 
-/* Private macro -------------------------------------------------------------*/
+/* Private macro -----------------------------------------*/
 /* USER CODE BEGIN PM */
 
 /* USER CODE END PM */
 
-/* Private variables ---------------------------------------------------------*/
+/* Private variables -------------------------------------*/
 
 /* USER CODE BEGIN PV */
 Servo servo_left = { &htim1, TIM_CHANNEL_1, SERVO_STOP };
@@ -140,7 +139,7 @@ int path_set = 0;  // Flag to indicate if a target has been set
 int locationReceived = 0;
 /* USER CODE END PV */
 
-/* Private function prototypes -----------------------------------------------*/
+/* Private function prototypes ---------------------------*/
 void SystemClock_Config(void);
 /* USER CODE BEGIN PFP */
 void HAL_UART_RxCpltCallback(UART_HandleTypeDef *huart);
@@ -156,7 +155,7 @@ void send_status_to_esp(void);
 
 /* USER CODE END PFP */
 
-/* Private user code ---------------------------------------------------------*/
+/* Private user code -------------------------------------*/
 /* USER CODE BEGIN 0 */
 
 /**
@@ -235,7 +234,7 @@ void handle_rotation() {
 
 		if (angle_error > 0) {
 			// Rotate right: Both motors move forward speed
-			left_right_pwm = FORWARD_SLOW;
+			left_right_pwm = FORWARD_SLOW + calculated_correction;
 
 			// Ensure PWM values are within valid ranges
 			if (left_right_pwm > FORWARD_MAX)
@@ -244,7 +243,7 @@ void handle_rotation() {
 				left_right_pwm = FORWARD_SLOW;
 		} else {
 			// Rotate left: Both motors move backward speed
-			left_right_pwm = BACKWARD_SLOW;
+			left_right_pwm = BACKWARD_SLOW - calculated_correction;
 
 			// Ensure PWM values are within valid ranges
 			if (left_right_pwm < BACKWARD_MAX)
@@ -477,14 +476,13 @@ void execute_command(const char *cmd) {
 
 		path_set = 1; 				// Set the target flag
 		currentTargetIndex = 0;
-		current_state = ROTATING;  	// Start with rotating to face the target
-	}
 
-	// Send status to ESP8266 every 500ms
-	uint32_t current_time = HAL_GetTick();
-	if (current_time - last_status_send_time >= SERIAL_SEND_INTERVAL) {
-		last_status_send_time = current_time;
-		send_status_to_esp();
+		if (totalCoords > 0) {
+			target_x = xCoords[currentTargetIndex];
+			target_y = yCoords[currentTargetIndex];
+		}
+
+		current_state = ROTATING;  	// Start with rotating to face the target
 	}
 }
 
@@ -508,7 +506,7 @@ void send_status_to_esp() {
 	// Append basic status information
 	int len =
 			snprintf(status_message, sizeof(status_message),
-					"STATE:%d;CURRENT_TARGET_INDEX:%d;MOTOR_L:%lu;MOTOR_R:%lu;ANGLE_ERROR:%.4f;CALCULATED_PID:%.4f;TARGET_DISTANCE:%.4f\n",
+					"STATE:%d;CURRENT_TARGET_INDEX:%d;MOTOR_L:%lu;MOTOR_R:%lu;ANGLE_ERROR:%.1f;CALCULATED_PID:%.2f;TARGET_DISTANCE:%.2f\n",
 					current_state, currentTargetIndex,
 					(unsigned long) servo_left.current_pwm,
 					(unsigned long) servo_right.current_pwm, angle_error,
@@ -541,7 +539,7 @@ int main(void) {
 
 	/* USER CODE END 1 */
 
-	/* MCU Configuration--------------------------------------------------------*/
+	/* MCU Configuration----------------------------------*/
 
 	/* Reset of all peripherals, Initializes the Flash interface and the Systick. */
 	HAL_Init();
@@ -619,6 +617,13 @@ int main(void) {
 		case IDLE:
 			break;
 		default:
+		}
+
+		// Send status to ESP8266 every 1000ms
+		uint32_t current_time = HAL_GetTick();
+		if (current_time - last_status_send_time >= SERIAL_SEND_INTERVAL) {
+			last_status_send_time = current_time;
+			send_status_to_esp();
 		}
 
 		HAL_Delay(10);
