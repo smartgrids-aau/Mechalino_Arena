@@ -1,35 +1,33 @@
 #!/usr/bin/env python3
-# Shebang line that specifies the Python interpreter for this script.
 
-import numpy as np  # Import the NumPy library, which provides support for arrays and numerical operations
-import rospy  # Import the rospy library, which is the Python client for ROS (Robot Operating System)
-import cv2  # Import OpenCV for computer vision tasks such as image processing and ArUco marker detection
-from sensor_msgs.msg import Image  # Import the ROS Image message type, used for exchanging image data between nodes
-from cv_bridge import CvBridge  # For converting between ROS Image messages and OpenCV images
-import cv2.aruco as aruco  # ArUco marker detection from OpenCV
-import traceback  # For handling and printing exceptions
-import tf  # ROS library for transformations
-import tf.transformations as tf_transformations  # ROS transformation library for quaternion/euler operations
-from geometry_msgs.msg import TransformStamped  # ROS message type for transformation information
-import tf2_ros  # ROS library for broadcasting transforms
-import mechalino_arena_utility as ma_utility  # Utility module (custom module specific to your project)
-from std_msgs.msg import Int32MultiArray  # For publishing arrays of integers
+import numpy as np
+import rospy
+import cv2
+from sensor_msgs.msg import Image
+from cv_bridge import CvBridge
+import cv2.aruco as aruco
+import traceback
+import tf
+import tf.transformations as tf_transformations
+from geometry_msgs.msg import TransformStamped
+import tf2_ros
+import mechalino_arena_utility as ma_utility
+from std_msgs.msg import Int32MultiArray
 
-# Global variables for marker detection and averaging
-corner_name = None  # Name of the corner marker to be detected
-corner_id = None  # ID of the corner marker to be detected
 
-avg_tvec = []  # List to store translation vectors (for averaging)
-avg_rotation_matrix = []  # List to store rotation matrices (for averaging)
+corner_name = None
+corner_id = None
 
-cv_bridge = None  # CV Bridge object for ROS <-> OpenCV conversions
-aruco_marker_detector = None  # ArUco marker detector object
-objPoints = None  # 3D points of the marker corners
-markerCorners = None  # Detected marker corners
-camera_matrix = None  # Camera matrix for intrinsic parameters
-distortion_coeffs = None  # Camera distortion coefficients
+avg_tvec = []
+avg_rotation_matrix = []
 
-# Callback function for the camera image subscriber
+cv_bridge = None
+aruco_marker_detector = None
+objPoints = None
+markerCorners = None
+camera_matrix = None
+distortion_coeffs = None
+
 def image_callback(image):
     global corner_name, corner_id, cv_bridge, aruco_marker_detector, camera_matrix, distortion_coeffs, objPoints
     global avg_tvec, avg_rotation_matrix
@@ -40,7 +38,6 @@ def image_callback(image):
         # Convert the image to grayscale for marker detection
         gray = cv2.cvtColor(cv_image, cv2.COLOR_BGR2GRAY)
 
-        # Detect ArUco markers in the grayscale image
         markerCorners, markerIds, _ = aruco_marker_detector.detectMarkers(gray)
         if markerIds is None:
             rospy.logwarn("No corners were detected!")
@@ -71,16 +68,13 @@ def image_callback(image):
         rospy.logerr("Error detecting corners: %s", str(e))
         traceback.print_exc()
 
-# Main function, executed when the script starts
 if __name__ == '__main__':
-    # Initialize the ROS node (as 'table_tf_publisher')
     rospy.init_node('table_tf_publisher', anonymous=True)
 
-    cv_bridge = CvBridge()  # Create a CvBridge object for converting between ROS and OpenCV images
+    cv_bridge = CvBridge()
 
-    # Retrieve parameters from ROS parameter server
-    corners_dictionary = int(rospy.get_param('~corners_dictionary'))  # ArUco marker dictionary ID
-    detectorParams = aruco.DetectorParameters()  # Initialize default ArUco detector parameters
+    corners_dictionary = int(rospy.get_param('~corners_dictionary'))
+    detectorParams = aruco.DetectorParameters()
 
     # Set custom ArUco detector parameters for more precise marker detection
     detectorParams.minMarkerPerimeterRate = 0.1
@@ -104,22 +98,21 @@ if __name__ == '__main__':
     aruco_marker_detector = aruco.ArucoDetector(dictionary, detectorParams)
 
     # Retrieve parameters for averaging, marker information, and camera calibration
-    avgCount = rospy.get_param('~corner_avg_count')  # Number of frames to average before publishing
-    corner_name = rospy.get_param('~corner_name')  # Name of the corner marker
-    corner_id = rospy.get_param('~corner_id')  # ID of the corner marker
+    avgCount = rospy.get_param('~corner_avg_count')
+    corner_name = rospy.get_param('~corner_name')
+    corner_id = rospy.get_param('~corner_id')
 
-    camera_matrix = np.array(rospy.get_param('~camera_matrix'))  # Camera intrinsic parameters
-    distortion_coeffs = np.array(rospy.get_param('~dist_coeff'))  # Camera distortion coefficients
+    camera_matrix = np.array(rospy.get_param('~camera_matrix'))
+    distortion_coeffs = np.array(rospy.get_param('~dist_coeff'))
 
     # Define the 3D coordinates of the marker corners (relative to the marker's center)
     corners_marker_size = np.array(rospy.get_param('~corners_marker_size'))
-    objPoints = np.zeros((4, 1, 3))  # Create an empty array to store 3D corner coordinates
+    objPoints = np.zeros((4, 1, 3))
     objPoints[3] = np.array([-corners_marker_size/2.0, -corners_marker_size/2.0, 0])
     objPoints[2] = np.array([corners_marker_size/2.0, -corners_marker_size/2.0, 0])
     objPoints[1] = np.array([corners_marker_size/2.0, corners_marker_size/2.0, 0])
     objPoints[0] = np.array([-corners_marker_size/2.0, corners_marker_size/2.0, 0])
 
-    # Create a TransformBroadcaster to publish the transformation between the camera and the detected marker
     broadcaster = tf2_ros.TransformBroadcaster()
 
     # Subscribe to the camera image topic
@@ -134,7 +127,6 @@ if __name__ == '__main__':
     # Once we have enough data, stop subscribing to the image topic
     image_subscriber.unregister()
 
-    # Pause to ensure the subscription is fully disconnected
     rospy.sleep(1)
     
     rospy.loginfo("Average count reached! Publishing table tf...")
@@ -159,8 +151,8 @@ if __name__ == '__main__':
     child_frame_id = 'table'
     transform_stamped = TransformStamped()
 
-    transform_stamped.header.frame_id = "camera"  # The frame from which the transform is being broadcasted (camera)
-    transform_stamped.child_frame_id = child_frame_id  # The frame representing the detected table
+    transform_stamped.header.frame_id = "camera"
+    transform_stamped.child_frame_id = child_frame_id
 
     # Set the translation component of the transform (from the averaged tvec)
     transform_stamped.transform.translation.x = final_tvec[0]
@@ -183,10 +175,8 @@ if __name__ == '__main__':
             # Broadcast the transform
             broadcaster.sendTransform(transform_stamped)
 
-            # Sleep to maintain the 3 Hz rate
             rate.sleep()
         except Exception as e:
-            # Log any errors that occur during broadcasting
             rospy.logerr("Error publishing table tf: %s", str(e))
             traceback.print_exc()
             break

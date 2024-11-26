@@ -1,33 +1,32 @@
 #!/usr/bin/env python3
-# This shebang line indicates that the script should be run with Python 3
 
-import numpy as np  # Import the NumPy library for array manipulation and numerical operations
-import rospy  # Import the ROS (Robot Operating System) Python client library
-import cv2  # Import OpenCV for computer vision tasks, such as image processing and ArUco marker detection
-from sensor_msgs.msg import Image  # Import ROS message type for images
-from cv_bridge import CvBridge  # Import CvBridge to convert between ROS Image messages and OpenCV images
-import cv2.aruco as aruco  # Import the ArUco marker detection module from OpenCV
-import traceback  # Import traceback to handle exceptions and print stack traces
-import tf  # Import tf for managing transformations between different coordinate frames in ROS
-import tf.transformations as tf_transformations  # Import utilities for transformation-related operations like quaternions and Euler angles
-import tf.transformations as tf_trans  # Alias for tf.transformations to simplify matrix operations
-from geometry_msgs.msg import TransformStamped  # Import ROS message type for broadcasting transformations
-import tf2_ros  # Import the ROS 2.0 version of the transform broadcasting library
-from std_msgs.msg import Float32MultiArray  # Import ROS message type for handling arrays of floating-point numbers
+import numpy as np
+import rospy
+import cv2
+from sensor_msgs.msg import Image
+from cv_bridge import CvBridge
+import cv2.aruco as aruco
+import traceback
+import tf
+import tf.transformations as tf_transformations
+import tf.transformations as tf_trans
+from geometry_msgs.msg import TransformStamped
+import tf2_ros
+from std_msgs.msg import Float32MultiArray
 
-# Global variable to store the transformation matrix between the table and the camera
+
 T_table_camera = None
 
 # Callback function that processes incoming camera images
 def image_callback(msg):
-    global cv_bridge  # Access the global CvBridge object to convert ROS images to OpenCV images
-    global aruco_marker_detector  # Access the global ArUco marker detector object
-    global mechalino_ids, number_of_specified_robots  # Access the list of robot IDs
-    global camera_matrix, distortion_coeffs, objPoints  # Access camera calibration parameters and 3D object points
-    global broadcaster, pose_publishers  # Access the global broadcaster and pose publishers for robots
-    global T_table_camera  # Access the global transformation matrix between the table and the camera
+    global cv_bridge
+    global aruco_marker_detector
+    global mechalino_ids, number_of_specified_robots
+    global camera_matrix, distortion_coeffs, objPoints
+    global broadcaster, pose_publishers
+    global T_table_camera
 
-    # Convert the ROS Image message into an OpenCV image (8-bit 3-channel)
+    # Convert the ROS Image message into an OpenCV image
     cv_image = cv_bridge.imgmsg_to_cv2(msg, desired_encoding="8UC3")
 
     try:
@@ -81,9 +80,9 @@ def image_callback(msg):
 
             # Create a TransformStamped message to broadcast the transformation
             transform_stamped = TransformStamped()
-            transform_stamped.header.stamp = rospy.Time.now()  # Set the current timestamp
-            transform_stamped.header.frame_id = "table"  # The parent frame is the table
-            transform_stamped.child_frame_id = f"mechalino_{markerIds[i][0]}"  # The child frame is the robot ID
+            transform_stamped.header.stamp = rospy.Time.now()
+            transform_stamped.header.frame_id = "table"
+            transform_stamped.child_frame_id = f"mechalino_{markerIds[i][0]}"
 
             # Set the translation component of the transform (x, y, z coordinates)
             transform_stamped.transform.translation.x = T_robot_table[0, 3]
@@ -114,10 +113,8 @@ def image_callback(msg):
         rospy.logerr(f"Error detecting markers: {str(e)}")
         traceback.print_exc()
 
-# Main function: runs when the script is executed
 if __name__ == '__main__':
     try:
-        # Initialize the ROS node for publishing robot transformations
         rospy.init_node('robots_publisher', anonymous=True)
 
         # Wait for the transform between the camera and the table
@@ -125,7 +122,6 @@ if __name__ == '__main__':
         tf_listener = tf.TransformListener()
         while not rospy.is_shutdown():
             try:
-                # Wait for the transform between the camera and the table to become available
                 tf_listener.waitForTransform("camera", "table", rospy.Time(), rospy.Duration(1.0))
                 break
             except Exception as e:
@@ -138,10 +134,8 @@ if __name__ == '__main__':
         )
         rospy.loginfo("Table tf found! Publishing Mechalino tfs...")
 
-        # Initialize the CvBridge object for ROS <-> OpenCV conversions
         cv_bridge = CvBridge()
 
-        # Initialize the ArUco detector with parameters from the ROS parameter server
         robots_dictionary = int(rospy.get_param('~robots_dictionary'))
         detectorParams = aruco.DetectorParameters()
 
@@ -197,7 +191,6 @@ if __name__ == '__main__':
         # Subscribe to the camera image topic to start the image processing callback
         rospy.Subscriber("/camera/image", Image, image_callback)
 
-        # Keep the node running
         rospy.spin()
 
     except rospy.ROSInterruptException:
