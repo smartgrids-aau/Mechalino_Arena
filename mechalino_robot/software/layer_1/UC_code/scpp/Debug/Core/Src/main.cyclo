@@ -1,6 +1,21 @@
+<<<<<<< HEAD
 ../Drivers/CMSIS/Include/core_cm4.h:1684:22:__NVIC_EnableIRQ	2
 ../Core/Src/main.c:69:6:HAL_UART_RxCpltCallback	8
 ../Core/Src/main.c:86:6:motor	1
 ../Core/Src/main.c:102:5:main	2
 ../Core/Src/main.c:382:6:SystemClock_Config	3
 ../Core/Src/main.c:431:6:Error_Handler	1
+=======
+../Core/Src/main.c:165:6:HAL_UART_RxCpltCallback	3
+../Core/Src/main.c:185:7:pid_controller	5
+../Core/Src/main.c:213:6:handle_rotation	9
+../Core/Src/main.c:270:6:handle_movement	14
+../Core/Src/main.c:364:7:calculate_angle	4
+../Core/Src/main.c:401:7:distance_to_target	1
+../Core/Src/main.c:411:6:execute_command	14
+../Core/Src/main.c:494:6:set_servo_pwm	4
+../Core/Src/main.c:502:6:send_status_to_esp	2
+../Core/Src/main.c:536:5:main	7
+../Core/Src/main.c:642:6:SystemClock_Config	3
+../Core/Src/main.c:692:6:Error_Handler	1
+>>>>>>> 1841b0444c6958fbb42f9be8eec7720996f1da32

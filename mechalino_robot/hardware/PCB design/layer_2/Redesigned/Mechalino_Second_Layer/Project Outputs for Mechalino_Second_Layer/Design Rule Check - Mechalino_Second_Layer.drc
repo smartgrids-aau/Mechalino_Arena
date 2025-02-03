@@ -1,7 +1,7 @@
 Protel Design System Design Rule Check
 PCB File : C:\Users\lukak\OneDrive\Dokumente\AAU\Bachelorarbeit\Mechalino_Arena\mechalino_robot\hardware\PCB design\layer_2\Redesigned\Mechalino_Second_Layer\Mechalino_Second_Layer.PcbDoc
-Date     : 11/07/2024
-Time     : 23:17:47
+Date     : 12/07/2024
+Time     : 01:27:45
 
 Processing Rule : Clearance Constraint (Gap=0.254mm) (All),(All)
 Rule Violations :0
@@ -51,4 +51,4 @@ Rule Violations :0
 
 Violations Detected : 0
 Waived Violations : 0
-Time Elapsed        : 00:00:02
+Time Elapsed        : 00:00:01
