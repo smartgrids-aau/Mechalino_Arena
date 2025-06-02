@@ -1,3 +1,11 @@
+<<<<<<< HEAD
+../Drivers/CMSIS/Include/core_cm4.h:1684:22:__NVIC_EnableIRQ	16	static,ignoring_inline_asm
+../Core/Src/main.c:69:6:HAL_UART_RxCpltCallback	16	static
+../Core/Src/main.c:86:6:motor	24	static
+../Core/Src/main.c:102:5:main	264	static
+../Core/Src/main.c:382:6:SystemClock_Config	88	static
+../Core/Src/main.c:431:6:Error_Handler	4	static,ignoring_inline_asm
+=======
 ../Core/Src/main.c:165:6:HAL_UART_RxCpltCallback	16	static
 ../Core/Src/main.c:185:7:pid_controller	40	static
 ../Core/Src/main.c:213:6:handle_rotation	24	static
@@ -10,3 +18,4 @@
 ../Core/Src/main.c:536:5:main	16	static
 ../Core/Src/main.c:642:6:SystemClock_Config	88	static
 ../Core/Src/main.c:692:6:Error_Handler	4	static,ignoring_inline_asm
+>>>>>>> 1841b0444c6958fbb42f9be8eec7720996f1da32
